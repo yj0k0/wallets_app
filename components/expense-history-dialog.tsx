@@ -60,17 +60,49 @@ export function ExpenseHistoryDialog({
 
   const getAllExpenses = (): (Expense & { monthKey: string })[] => {
     const allExpenses: (Expense & { monthKey: string })[] = []
+    
+    // monthlyDataが存在しない場合は空配列を返す
+    if (!monthlyData || typeof monthlyData !== 'object') {
+      console.warn('monthlyData is undefined or invalid:', monthlyData)
+      return []
+    }
+    
     Object.entries(monthlyData).forEach(([monthKey, data]) => {
-      data.expenses.forEach((expense) => {
-        allExpenses.push({ ...expense, monthKey })
-      })
+      // dataとdata.expensesが存在することを確認
+      if (data && data.expenses && Array.isArray(data.expenses)) {
+        data.expenses.forEach((expense) => {
+          allExpenses.push({ ...expense, monthKey })
+        })
+      } else {
+        console.warn('Invalid data structure for monthKey:', monthKey, data)
+      }
     })
     return allExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
   }
 
   const getMonthlySummaries = () => {
+    // monthlyDataが存在しない場合は空配列を返す
+    if (!monthlyData || typeof monthlyData !== 'object') {
+      console.warn('monthlyData is undefined or invalid for summaries:', monthlyData)
+      return []
+    }
+    
     return Object.entries(monthlyData)
       .map(([monthKey, data]) => {
+        // dataとそのプロパティが存在することを確認
+        if (!data || !data.categories || !data.expenses) {
+          console.warn('Invalid data structure for monthKey in summaries:', monthKey, data)
+          return {
+            monthKey,
+            totalBudget: 0,
+            totalSpent: 0,
+            remaining: 0,
+            expenseCount: 0,
+            categoryCount: 0,
+            utilizationRate: 0,
+          }
+        }
+        
         const totalBudget = data.categories.reduce((sum, cat) => sum + cat.budget, 0)
         const totalSpent = data.expenses.reduce((sum, exp) => sum + exp.amount, 0)
         const expenseCount = data.expenses.length
@@ -89,12 +121,18 @@ export function ExpenseHistoryDialog({
       .sort((a, b) => b.monthKey.localeCompare(a.monthKey))
   }
 
-  const getCurrentMonthData = () => monthlyData[currentMonth] || { categories: [], expenses: [] }
+  const getCurrentMonthData = () => {
+    if (!monthlyData || !currentMonth) {
+      return { categories: [], expenses: [] }
+    }
+    return monthlyData[currentMonth] || { categories: [], expenses: [] }
+  }
   const { categories: currentCategories, expenses: currentExpenses } = getCurrentMonthData()
 
   const getCategoryInfo = (categoryId: string, monthKey: string) => {
+    if (!monthlyData || !monthKey) return null
     const monthData = monthlyData[monthKey]
-    if (!monthData) return null
+    if (!monthData || !monthData.categories) return null
     return monthData.categories.find((c) => c.id === categoryId)
   }
 

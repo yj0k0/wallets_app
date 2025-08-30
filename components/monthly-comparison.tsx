@@ -75,8 +75,8 @@ const calculateCategoryComparison = (currentData: MonthlyData, compareData: Mont
   ])
 
   allCategories.forEach((categoryName) => {
-    const currentCat = currentData.categories.find((c) => c.name === categoryName)
-    const compareCat = compareData.categories.find((c) => c.name === categoryName)
+    const currentCat = currentData.categories?.find((c) => c.name === categoryName)
+    const compareCat = compareData.categories?.find((c) => c.name === categoryName)
 
     const currentSpent = currentCat?.spent || 0
     const compareSpent = compareCat?.spent || 0
