@@ -7,8 +7,7 @@ import {
   where, 
   getDocs, 
   deleteDoc,
-  onSnapshot,
-  orderBy
+  onSnapshot
 } from 'firebase/firestore'
 import { db } from './firebase'
 

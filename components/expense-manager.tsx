@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, History, Target, ArrowLeft, Wifi, WifiOff } from "lucide-react"
-import { syncProjectData, type ProjectData } from "@/lib/sync"
+import { syncProjectData } from "@/lib/sync"
 import { useAuth } from "@/components/auth-provider"
 
 import { BudgetCategory } from "@/components/budget-category"
@@ -50,13 +50,11 @@ interface ExpenseManagerProps {
 
 export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseManagerProps) {
   const router = useRouter()
-  const { user } = useAuth()
   const [currentMonth, setCurrentMonth] = useState<string>(getMonthKey(new Date()))
   const [monthlyData, setMonthlyData] = useState<Record<string, MonthlyData>>({})
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
-  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     // オンライン状態をチェック
@@ -146,8 +144,6 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
           }
           setMonthlyData(defaultData)
         }
-      } finally {
-        setIsLoading(false)
       }
     }
 

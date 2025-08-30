@@ -134,7 +134,7 @@ export function ExpenseHistoryDialog({
     }
     return monthlyData[currentMonth] || { categories: [], expenses: [] }
   }
-  const { categories: currentCategories, expenses: currentExpenses } = getCurrentMonthData()
+  const { expenses: currentExpenses } = getCurrentMonthData()
 
   const getCategoryInfo = (categoryId: string, monthKey: string) => {
     if (!monthlyData || !monthKey) return null

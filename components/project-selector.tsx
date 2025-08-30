@@ -21,7 +21,6 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
   const { user, loading: authLoading, error: authError, signInAnonymously } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [isOnline, setIsOnline] = useState(true)
-  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -66,8 +65,6 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
           setProjects([])
         }
         setError(error instanceof Error ? error.message : 'プロジェクトの読み込みに失敗しました')
-      } finally {
-        setIsLoading(false)
       }
     }
 
@@ -90,7 +87,9 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
     return () => {
       window.removeEventListener('online', checkOnlineStatus)
       window.removeEventListener('offline', checkOnlineStatus)
-      unsubscribe()
+      if (unsubscribe) {
+        unsubscribe()
+      }
     }
   }, [authLoading, user, signInAnonymously])
 
