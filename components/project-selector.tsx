@@ -18,10 +18,11 @@ interface ProjectSelectorProps {
 
 export function ProjectSelector({ showOnboardingHints = false }: ProjectSelectorProps) {
   const router = useRouter()
-  const { user, loading: authLoading, signInAnonymously } = useAuth()
+  const { user, loading: authLoading, error: authError, signInAnonymously } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [isOnline, setIsOnline] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     // 認証が完了していない場合は匿名認証を実行
@@ -44,10 +45,12 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
     // Firestoreからプロジェクトを取得
     const loadProjects = async () => {
       try {
+        setError(null)
         const projectsData = await syncProjects.getProjects(user.uid)
         setProjects(projectsData)
       } catch (error) {
         console.error('Error loading projects:', error)
+        setError(error instanceof Error ? error.message : 'プロジェクトの読み込みに失敗しました')
         // オフライン時はlocalStorageから読み込み
         if (typeof window !== "undefined") {
           const saved = localStorage.getItem("expense-projects")
@@ -64,10 +67,15 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
 
     // リアルタイム同期
     const unsubscribe = syncProjects.subscribeToProjects(user.uid, (projectsData) => {
-      setProjects(projectsData)
-      // ローカルバックアップも保存
-      if (typeof window !== "undefined") {
-        localStorage.setItem("expense-projects", JSON.stringify(projectsData))
+      if (Array.isArray(projectsData)) {
+        setProjects(projectsData)
+        // ローカルバックアップも保存
+        if (typeof window !== "undefined") {
+          localStorage.setItem("expense-projects", JSON.stringify(projectsData))
+        }
+      } else {
+        console.error('Invalid projects data received:', projectsData)
+        setError('プロジェクトデータの形式が無効です')
       }
     })
 
@@ -181,6 +189,27 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
               </Badge>
             )}
           </div>
+
+          {/* エラー表示 */}
+          {(authError || error) && (
+            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+              <p className="text-sm text-destructive font-medium">エラーが発生しました</p>
+              {authError && (
+                <p className="text-xs text-destructive mt-1">認証エラー: {authError}</p>
+              )}
+              {error && (
+                <p className="text-xs text-destructive mt-1">データエラー: {error}</p>
+              )}
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => window.location.reload()} 
+                className="mt-2"
+              >
+                ページを再読み込み
+              </Button>
+            </div>
+          )}
 
           {showHints && (
             <div className="flex items-center justify-center gap-2">

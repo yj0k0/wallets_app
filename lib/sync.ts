@@ -54,14 +54,26 @@ export const syncProjects = {
     try {
       const q = query(
         collection(db, 'projects'),
-        where('userId', '==', userId),
-        orderBy('lastModified', 'desc')
+        where('userId', '==', userId)
+        // orderBy('lastModified', 'desc') // 一時的にコメントアウト
       )
       const querySnapshot = await getDocs(q)
-      return querySnapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      })) as Project[]
+      const projects = querySnapshot.docs.map(doc => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          name: data.name || '',
+          description: data.description || '',
+          createdAt: data.createdAt || new Date().toISOString(),
+          lastModified: data.lastModified || new Date().toISOString(),
+          userId: data.userId || userId
+        } as Project
+      })
+      
+      // クライアントサイドでソート
+      return projects.sort((a, b) => 
+        new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+      )
     } catch (error) {
       console.error('Error getting projects:', error)
       return []
@@ -95,16 +107,28 @@ export const syncProjects = {
   subscribeToProjects(userId: string, callback: (projects: Project[]) => void) {
     const q = query(
       collection(db, 'projects'),
-      where('userId', '==', userId),
-      orderBy('lastModified', 'desc')
+      where('userId', '==', userId)
+      // orderBy('lastModified', 'desc') // 一時的にコメントアウト
     )
     
     return onSnapshot(q, (querySnapshot) => {
-      const projects = querySnapshot.docs.map(doc => ({
-        ...doc.data(),
-        id: doc.id
-      })) as Project[]
-      callback(projects)
+      const projects = querySnapshot.docs.map(doc => {
+        const data = doc.data()
+        return {
+          id: doc.id,
+          name: data.name || '',
+          description: data.description || '',
+          createdAt: data.createdAt || new Date().toISOString(),
+          lastModified: data.lastModified || new Date().toISOString(),
+          userId: data.userId || userId
+        } as Project
+      })
+      
+      // クライアントサイドでソート
+      const sortedProjects = projects.sort((a, b) => 
+        new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+      )
+      callback(sortedProjects)
     })
   }
 }
@@ -118,7 +142,11 @@ export const syncProjectData = {
       const docSnap = await getDoc(docRef)
       
       if (docSnap.exists()) {
-        return docSnap.data() as ProjectData
+        const data = docSnap.data()
+        // データの検証とデフォルト値の設定
+        if (data && typeof data === 'object') {
+          return data as ProjectData
+        }
       }
       return null
     } catch (error) {
@@ -146,7 +174,13 @@ export const syncProjectData = {
     
     return onSnapshot(docRef, (doc) => {
       if (doc.exists()) {
-        callback(doc.data() as ProjectData)
+        const data = doc.data()
+        // データの検証
+        if (data && typeof data === 'object') {
+          callback(data as ProjectData)
+        } else {
+          callback(null)
+        }
       } else {
         callback(null)
       }
