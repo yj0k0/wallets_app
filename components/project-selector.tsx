@@ -9,8 +9,14 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Plus, FolderOpen, Calendar, Trash2, HelpCircle, Lightbulb, Wifi, WifiOff } from "lucide-react"
-import { syncProjects, type Project } from "@/lib/sync"
-import { useAuth } from "@/components/auth-provider"
+
+interface Project {
+  id: string
+  name: string
+  description: string
+  createdAt: string
+  lastModified: string
+}
 
 interface ProjectSelectorProps {
   showOnboardingHints?: boolean
@@ -18,20 +24,11 @@ interface ProjectSelectorProps {
 
 export function ProjectSelector({ showOnboardingHints = false }: ProjectSelectorProps) {
   const router = useRouter()
-  const { user, loading: authLoading, signInAnonymously } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [isOnline, setIsOnline] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // 認証が完了していない場合は匿名認証を実行
-    if (!authLoading && !user) {
-      signInAnonymously()
-      return
-    }
-
-    if (!user) return
-    
     // オンライン状態をチェック
     const checkOnlineStatus = () => {
       setIsOnline(navigator.onLine)
@@ -41,20 +38,17 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
     window.addEventListener('offline', checkOnlineStatus)
     checkOnlineStatus()
 
-    // Firestoreからプロジェクトを取得
-    const loadProjects = async () => {
+    // ローカルストレージからプロジェクトを読み込み
+    const loadProjects = () => {
       try {
-        const projectsData = await syncProjects.getProjects(user.uid)
-        setProjects(projectsData)
-      } catch (error) {
-        console.error('Error loading projects:', error)
-        // オフライン時はlocalStorageから読み込み
         if (typeof window !== "undefined") {
           const saved = localStorage.getItem("expense-projects")
           if (saved) {
             setProjects(JSON.parse(saved))
           }
         }
+      } catch (error) {
+        console.error('Error loading projects:', error)
       } finally {
         setIsLoading(false)
       }
@@ -62,19 +56,9 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
 
     loadProjects()
 
-    // リアルタイム同期
-    const unsubscribe = syncProjects.subscribeToProjects(user.uid, (projectsData) => {
-      setProjects(projectsData)
-      // ローカルバックアップも保存
-      if (typeof window !== "undefined") {
-        localStorage.setItem("expense-projects", JSON.stringify(projectsData))
-      }
-    })
-
     return () => {
       window.removeEventListener('online', checkOnlineStatus)
       window.removeEventListener('offline', checkOnlineStatus)
-      unsubscribe()
     }
   }, [])
 
@@ -83,25 +67,14 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
   const [newProjectDescription, setNewProjectDescription] = useState("")
   const [showHints, setShowHints] = useState(showOnboardingHints)
 
-  const saveProjects = async (updatedProjects: Project[]) => {
+  const saveProjects = (updatedProjects: Project[]) => {
     setProjects(updatedProjects)
     // ローカルバックアップ
     localStorage.setItem("expense-projects", JSON.stringify(updatedProjects))
-    
-    // オンライン時はFirestoreに保存
-    if (isOnline && user) {
-      try {
-        for (const project of updatedProjects) {
-          await syncProjects.saveProject(project)
-        }
-      } catch (error) {
-        console.error('Error saving to Firestore:', error)
-      }
-    }
   }
 
-  const createProject = async () => {
-    if (!newProjectName.trim() || !user) return
+  const createProject = () => {
+    if (!newProjectName.trim()) return
 
     const newProject: Project = {
       id: Date.now().toString(),
@@ -109,7 +82,6 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
       description: newProjectDescription.trim(),
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
-      userId: user.uid,
     }
 
     const updatedProjects = [...projects, newProject]
@@ -123,21 +95,12 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
     router.push(`/projects/${newProject.id}`)
   }
 
-  const deleteProject = async (projectId: string) => {
+  const deleteProject = (projectId: string) => {
     const updatedProjects = projects.filter((p) => p.id !== projectId)
-    await saveProjects(updatedProjects)
+    saveProjects(updatedProjects)
 
     // Also remove project data from localStorage
     localStorage.removeItem(`expense-project-${projectId}`)
-    
-    // オンライン時はFirestoreからも削除
-    if (isOnline) {
-      try {
-        await syncProjects.deleteProject(projectId)
-      } catch (error) {
-        console.error('Error deleting from Firestore:', error)
-      }
-    }
     
     // If we're currently on the deleted project's page, redirect to home
     if (typeof window !== "undefined" && window.location.pathname === `/projects/${projectId}`) {
@@ -161,18 +124,12 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
           <h1 className="text-3xl font-bold text-foreground">出費管理</h1>
           <p className="text-muted-foreground">プロジェクトを選択または作成してください</p>
           
-          {/* 認証・オンライン状態表示 */}
+          {/* オンライン状態表示 */}
           <div className="flex items-center justify-center gap-2">
-            {user && (
-              <Badge variant="outline" className="gap-1">
-                <FolderOpen className="h-3 w-3" />
-                ユーザー: {user.uid.slice(-8)}
-              </Badge>
-            )}
             {isOnline ? (
               <Badge variant="default" className="gap-1">
                 <Wifi className="h-3 w-3" />
-                オンライン同期
+                ローカルモード
               </Badge>
             ) : (
               <Badge variant="secondary" className="gap-1">
