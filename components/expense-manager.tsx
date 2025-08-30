@@ -46,9 +46,10 @@ const getMonthKey = (date: Date): string => {
 interface ExpenseManagerProps {
   projectId: string
   onBackToProjects?: () => void
+  isReadOnly?: boolean
 }
 
-export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseManagerProps) {
+export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly = false }: ExpenseManagerProps) {
   const router = useRouter()
   const [currentMonth, setCurrentMonth] = useState<string>(getMonthKey(new Date()))
   const [monthlyData, setMonthlyData] = useState<Record<string, MonthlyData>>({})

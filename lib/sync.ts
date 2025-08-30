@@ -11,6 +11,19 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 
+// 共有トークンを生成する関数
+export const generateShareToken = (): string => {
+  return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)
+}
+
+// 共有URLを生成する関数
+export const generateShareUrl = (shareToken: string): string => {
+  if (typeof window !== 'undefined') {
+    return `${window.location.origin}/shared/${shareToken}`
+  }
+  return `/shared/${shareToken}`
+}
+
 export interface Project {
   id: string
   name: string
@@ -18,6 +31,9 @@ export interface Project {
   createdAt: string
   lastModified: string
   userId: string
+  isShared?: boolean
+  shareToken?: string
+  sharedAt?: string
 }
 
 export interface Category {
@@ -151,6 +167,69 @@ export const syncProjects = {
     } catch (error) {
       console.error('Error setting up projects subscription:', error)
       callback([])
+    }
+  },
+
+  // プロジェクトを共有する
+  async shareProject(projectId: string, shareToken: string): Promise<void> {
+    try {
+      const projectRef = doc(db, 'projects', projectId)
+      await setDoc(projectRef, {
+        isShared: true,
+        shareToken,
+        sharedAt: new Date().toISOString()
+      }, { merge: true })
+    } catch (error) {
+      console.error('Error sharing project:', error)
+      throw error
+    }
+  },
+
+  // 共有を解除する
+  async unshareProject(projectId: string): Promise<void> {
+    try {
+      const projectRef = doc(db, 'projects', projectId)
+      await setDoc(projectRef, {
+        isShared: false,
+        shareToken: null,
+        sharedAt: null
+      }, { merge: true })
+    } catch (error) {
+      console.error('Error unsharing project:', error)
+      throw error
+    }
+  },
+
+  // 共有トークンでプロジェクトを取得
+  async getProjectByShareToken(shareToken: string): Promise<Project | null> {
+    try {
+      const q = query(
+        collection(db, 'projects'),
+        where('shareToken', '==', shareToken),
+        where('isShared', '==', true)
+      )
+      const querySnapshot = await getDocs(q)
+      
+      if (querySnapshot.empty) {
+        return null
+      }
+      
+      const doc = querySnapshot.docs[0]
+      const data = doc.data()
+      return {
+        id: doc.id,
+        name: data.name || '',
+        description: data.description || '',
+        createdAt: data.createdAt || new Date().toISOString(),
+        lastModified: data.lastModified || new Date().toISOString(),
+        userId: data.userId || '',
+        isShared: data.isShared || false,
+        shareToken: data.shareToken || '',
+        sharedAt: data.sharedAt || ''
+      } as Project
+    } catch (error) {
+      console.error('Error getting project by share token:', error)
+      return null
     }
   }
 }

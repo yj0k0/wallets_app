@@ -8,9 +8,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { Plus, FolderOpen, Calendar, Trash2, HelpCircle, Lightbulb, Wifi, WifiOff } from "lucide-react"
+import { Plus, FolderOpen, Calendar, Trash2, HelpCircle, Lightbulb, Wifi, WifiOff, Share2 } from "lucide-react"
 import { syncProjects, type Project } from "@/lib/sync"
 import { useAuth } from "@/components/auth-provider"
+import { ShareProjectDialog } from "@/components/share-project-dialog"
 
 interface ProjectSelectorProps {
   showOnboardingHints?: boolean
@@ -97,6 +98,8 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
   const [newProjectName, setNewProjectName] = useState("")
   const [newProjectDescription, setNewProjectDescription] = useState("")
   const [showHints, setShowHints] = useState(showOnboardingHints)
+  const [shareDialogOpen, setShareDialogOpen] = useState(false)
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
 
   const saveProjects = async (updatedProjects: Project[]) => {
     setProjects(updatedProjects)
@@ -326,17 +329,31 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
                           <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
                         )}
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          deleteProject(project.id)
-                        }}
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedProject(project)
+                            setShareDialogOpen(true)
+                          }}
+                          className="text-muted-foreground hover:text-foreground hover:bg-accent/10"
+                        >
+                          <Share2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteProject(project.id)
+                          }}
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0" onClick={() => router.push(`/projects/${project.id}`)}>
@@ -373,6 +390,15 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Share Project Dialog */}
+        {selectedProject && (
+          <ShareProjectDialog
+            project={selectedProject}
+            open={shareDialogOpen}
+            onOpenChange={setShareDialogOpen}
+          />
         )}
       </div>
     </div>
