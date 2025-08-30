@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Eye, Calendar, Users, AlertCircle } from "lucide-react"
 import { syncProjects, syncProjectData, type Project, type ProjectData } from "@/lib/sync"
-import { ExpenseManager } from "@/components/expense-manager"
+import ExpenseManager from "@/components/expense-manager"
 
 export default function SharedProjectPage() {
   const params = useParams()
