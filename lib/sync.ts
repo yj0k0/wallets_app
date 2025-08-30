@@ -105,31 +105,54 @@ export const syncProjects = {
 
   // リアルタイムリスナー
   subscribeToProjects(userId: string, callback: (projects: Project[]) => void) {
-    const q = query(
-      collection(db, 'projects'),
-      where('userId', '==', userId)
-      // orderBy('lastModified', 'desc') // 一時的にコメントアウト
-    )
-    
-    return onSnapshot(q, (querySnapshot) => {
-      const projects = querySnapshot.docs.map(doc => {
-        const data = doc.data()
-        return {
-          id: doc.id,
-          name: data.name || '',
-          description: data.description || '',
-          createdAt: data.createdAt || new Date().toISOString(),
-          lastModified: data.lastModified || new Date().toISOString(),
-          userId: data.userId || userId
-        } as Project
-      })
+    try {
+      console.log('Setting up projects subscription for userId:', userId)
       
-      // クライアントサイドでソート
-      const sortedProjects = projects.sort((a, b) => 
-        new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+      const q = query(
+        collection(db, 'projects'),
+        where('userId', '==', userId)
+        // orderBy('lastModified', 'desc') // 一時的にコメントアウト
       )
-      callback(sortedProjects)
-    })
+      
+      return onSnapshot(q, (querySnapshot) => {
+        try {
+          console.log('Projects snapshot received, docs count:', querySnapshot.docs.length)
+          
+          const projects = querySnapshot.docs.map(doc => {
+            const data = doc.data()
+            console.log('Document data:', doc.id, data)
+            
+            return {
+              id: doc.id,
+              name: data?.name || '',
+              description: data?.description || '',
+              createdAt: data?.createdAt || new Date().toISOString(),
+              lastModified: data?.lastModified || new Date().toISOString(),
+              userId: data?.userId || userId
+            } as Project
+          })
+          
+          console.log('Processed projects:', projects)
+          
+          // クライアントサイドでソート
+          const sortedProjects = projects.sort((a, b) => 
+            new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+          )
+          
+          console.log('Sorted projects:', sortedProjects)
+          callback(sortedProjects)
+        } catch (error) {
+          console.error('Error in projects snapshot handler:', error)
+          callback([])
+        }
+      }, (error) => {
+        console.error('Projects subscription error:', error)
+        callback([])
+      })
+    } catch (error) {
+      console.error('Error setting up projects subscription:', error)
+      callback([])
+    }
   }
 }
 

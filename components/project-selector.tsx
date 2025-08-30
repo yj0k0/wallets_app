@@ -42,22 +42,28 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
     window.addEventListener('offline', checkOnlineStatus)
     checkOnlineStatus()
 
-    // Firestoreからプロジェクトを取得
+    // 一時的にFirebase機能を無効にしてデバッグ
     const loadProjects = async () => {
       try {
         setError(null)
-        const projectsData = await syncProjects.getProjects(user.uid)
-        setProjects(projectsData)
-      } catch (error) {
-        console.error('Error loading projects:', error)
-        setError(error instanceof Error ? error.message : 'プロジェクトの読み込みに失敗しました')
-        // オフライン時はlocalStorageから読み込み
+        console.log('Loading projects from localStorage for debugging')
+        
+        // ローカルストレージから読み込み
         if (typeof window !== "undefined") {
           const saved = localStorage.getItem("expense-projects")
           if (saved) {
-            setProjects(JSON.parse(saved))
+            const projectsData = JSON.parse(saved)
+            console.log('Loaded projects from localStorage:', projectsData)
+            setProjects(projectsData)
+          } else {
+            console.log('No projects found in localStorage')
+            setProjects([])
           }
         }
+      } catch (error) {
+        console.error('Error loading projects:', error)
+        setError(error instanceof Error ? error.message : 'プロジェクトの読み込みに失敗しました')
+        setProjects([])
       } finally {
         setIsLoading(false)
       }
@@ -65,19 +71,10 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
 
     loadProjects()
 
-    // リアルタイム同期
-    const unsubscribe = syncProjects.subscribeToProjects(user.uid, (projectsData) => {
-      if (Array.isArray(projectsData)) {
-        setProjects(projectsData)
-        // ローカルバックアップも保存
-        if (typeof window !== "undefined") {
-          localStorage.setItem("expense-projects", JSON.stringify(projectsData))
-        }
-      } else {
-        console.error('Invalid projects data received:', projectsData)
-        setError('プロジェクトデータの形式が無効です')
-      }
-    })
+    // リアルタイム同期を一時的に無効化
+    const unsubscribe = () => {
+      console.log('Firebase subscription disabled for debugging')
+    }
 
     return () => {
       window.removeEventListener('online', checkOnlineStatus)
