@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, History, Target, ArrowLeft, Wifi, WifiOff } from "lucide-react"
+import { syncProjectData, type ProjectData } from "@/lib/sync"
+import { useAuth } from "@/components/auth-provider"
 
 import { BudgetCategory } from "@/components/budget-category"
 import { AddCategoryDialog } from "@/components/add-category-dialog"
@@ -48,6 +50,7 @@ interface ExpenseManagerProps {
 
 export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseManagerProps) {
   const router = useRouter()
+  const { user } = useAuth()
   const [currentMonth, setCurrentMonth] = useState<string>(getMonthKey(new Date()))
   const [monthlyData, setMonthlyData] = useState<Record<string, MonthlyData>>({})
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -65,9 +68,30 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
     window.addEventListener('offline', checkOnlineStatus)
     checkOnlineStatus()
 
-    // ローカルストレージからデータを読み込み
-    const loadProjectData = () => {
+    // Firestoreからデータを取得
+    const loadProjectData = async () => {
       try {
+        const projectData = await syncProjectData.getProjectData(projectId)
+        if (projectData) {
+          setMonthlyData(projectData)
+        } else {
+          // ローカルバックアップから読み込み
+          const savedData = localStorage.getItem(`expense-project-${projectId}`)
+          if (savedData) {
+            setMonthlyData(JSON.parse(savedData))
+          } else {
+            const defaultData = {
+              [currentMonth]: {
+                categories: [],
+                expenses: [],
+              },
+            }
+            setMonthlyData(defaultData)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading project data:', error)
+        // エラー時はローカルバックアップから読み込み
         const savedData = localStorage.getItem(`expense-project-${projectId}`)
         if (savedData) {
           setMonthlyData(JSON.parse(savedData))
@@ -80,15 +104,6 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
           }
           setMonthlyData(defaultData)
         }
-      } catch (error) {
-        console.error('Error loading project data:', error)
-        const defaultData = {
-          [currentMonth]: {
-            categories: [],
-            expenses: [],
-          },
-        }
-        setMonthlyData(defaultData)
       } finally {
         setIsLoading(false)
       }
@@ -96,9 +111,19 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
 
     loadProjectData()
 
+    // リアルタイム同期
+    const unsubscribe = syncProjectData.subscribeToProjectData(projectId, (projectData) => {
+      if (projectData) {
+        setMonthlyData(projectData)
+        // ローカルバックアップも保存
+        localStorage.setItem(`expense-project-${projectId}`, JSON.stringify(projectData))
+      }
+    })
+
     return () => {
       window.removeEventListener('online', checkOnlineStatus)
       window.removeEventListener('offline', checkOnlineStatus)
+      unsubscribe()
     }
   }, [projectId, currentMonth])
 
@@ -106,8 +131,15 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
     if (Object.keys(monthlyData).length > 0) {
       // ローカルバックアップ
       localStorage.setItem(`expense-project-${projectId}`, JSON.stringify(monthlyData))
+      
+      // オンライン時はFirestoreに保存
+      if (isOnline) {
+        syncProjectData.saveProjectData(projectId, monthlyData).catch((error) => {
+          console.error('Error saving to Firestore:', error)
+        })
+      }
     }
-  }, [monthlyData, projectId])
+  }, [monthlyData, projectId, isOnline])
 
   const getCurrentMonthData = (): MonthlyData => {
     return monthlyData[currentMonth] || { categories: [], expenses: [] }
