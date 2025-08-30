@@ -9,8 +9,16 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Plus, FolderOpen, Calendar, Trash2, HelpCircle, Lightbulb, Wifi, WifiOff } from "lucide-react"
-import { syncProjects, type Project } from "@/lib/sync"
-import { useAuth } from "@/components/auth-provider"
+// import { syncProjects, type Project } from "@/lib/sync"
+// import { useAuth } from "@/components/auth-provider"
+
+interface Project {
+  id: string
+  name: string
+  description: string
+  createdAt: string
+  lastModified: string
+}
 
 interface ProjectSelectorProps {
   showOnboardingHints?: boolean
@@ -18,21 +26,13 @@ interface ProjectSelectorProps {
 
 export function ProjectSelector({ showOnboardingHints = false }: ProjectSelectorProps) {
   const router = useRouter()
-  const { user, loading: authLoading, error: authError, signInAnonymously } = useAuth()
+  // const { user, loading: authLoading, error: authError, signInAnonymously } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [isOnline, setIsOnline] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // 認証が完了していない場合は匿名認証を実行
-    if (!authLoading && !user) {
-      signInAnonymously()
-      return
-    }
-
-    if (!user) return
-    
     // オンライン状態をチェック
     const checkOnlineStatus = () => {
       setIsOnline(navigator.onLine)
@@ -42,8 +42,8 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
     window.addEventListener('offline', checkOnlineStatus)
     checkOnlineStatus()
 
-    // 一時的にFirebase機能を無効にしてデバッグ
-    const loadProjects = async () => {
+    // ローカルストレージから読み込み
+    const loadProjects = () => {
       try {
         setError(null)
         console.log('Loading projects from localStorage for debugging')
@@ -71,42 +71,26 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
 
     loadProjects()
 
-    // リアルタイム同期を一時的に無効化
-    const unsubscribe = () => {
-      console.log('Firebase subscription disabled for debugging')
-    }
-
     return () => {
       window.removeEventListener('online', checkOnlineStatus)
       window.removeEventListener('offline', checkOnlineStatus)
-      unsubscribe()
     }
-  }, [authLoading, user, signInAnonymously])
+  }, [])
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState("")
   const [newProjectDescription, setNewProjectDescription] = useState("")
   const [showHints, setShowHints] = useState(showOnboardingHints)
 
-  const saveProjects = async (updatedProjects: Project[]) => {
+  const saveProjects = (updatedProjects: Project[]) => {
     setProjects(updatedProjects)
-    // ローカルバックアップ
+    // ローカルバックアップのみ
     localStorage.setItem("expense-projects", JSON.stringify(updatedProjects))
-    
-    // オンライン時はFirestoreに保存
-    if (isOnline && user) {
-      try {
-        for (const project of updatedProjects) {
-          await syncProjects.saveProject(project)
-        }
-      } catch (error) {
-        console.error('Error saving to Firestore:', error)
-      }
-    }
+    console.log('Saved projects to localStorage:', updatedProjects)
   }
 
-  const createProject = async () => {
-    if (!newProjectName.trim() || !user) return
+  const createProject = () => {
+    if (!newProjectName.trim()) return
 
     const newProject: Project = {
       id: Date.now().toString(),
@@ -114,7 +98,6 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
       description: newProjectDescription.trim(),
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
-      userId: user.uid,
     }
 
     const updatedProjects = [...projects, newProject]
@@ -128,21 +111,12 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
     router.push(`/projects/${newProject.id}`)
   }
 
-  const deleteProject = async (projectId: string) => {
+  const deleteProject = (projectId: string) => {
     const updatedProjects = projects.filter((p) => p.id !== projectId)
-    await saveProjects(updatedProjects)
+    saveProjects(updatedProjects)
 
     // Also remove project data from localStorage
     localStorage.removeItem(`expense-project-${projectId}`)
-    
-    // オンライン時はFirestoreからも削除
-    if (isOnline) {
-      try {
-        await syncProjects.deleteProject(projectId)
-      } catch (error) {
-        console.error('Error deleting from Firestore:', error)
-      }
-    }
     
     // If we're currently on the deleted project's page, redirect to home
     if (typeof window !== "undefined" && window.location.pathname === `/projects/${projectId}`) {
@@ -166,18 +140,12 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
           <h1 className="text-3xl font-bold text-foreground">出費管理</h1>
           <p className="text-muted-foreground">プロジェクトを選択または作成してください</p>
           
-          {/* 認証・オンライン状態表示 */}
+          {/* オンライン状態表示 */}
           <div className="flex items-center justify-center gap-2">
-            {user && (
-              <Badge variant="outline" className="gap-1">
-                <FolderOpen className="h-3 w-3" />
-                ユーザー: {user.uid.slice(-8)}
-              </Badge>
-            )}
             {isOnline ? (
               <Badge variant="default" className="gap-1">
                 <Wifi className="h-3 w-3" />
-                オンライン同期
+                ローカルモード
               </Badge>
             ) : (
               <Badge variant="secondary" className="gap-1">
@@ -188,15 +156,10 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
           </div>
 
           {/* エラー表示 */}
-          {(authError || error) && (
+          {error && (
             <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
               <p className="text-sm text-destructive font-medium">エラーが発生しました</p>
-              {authError && (
-                <p className="text-xs text-destructive mt-1">認証エラー: {authError}</p>
-              )}
-              {error && (
-                <p className="text-xs text-destructive mt-1">データエラー: {error}</p>
-              )}
+              <p className="text-xs text-destructive mt-1">データエラー: {error}</p>
               <Button 
                 variant="outline" 
                 size="sm" 
