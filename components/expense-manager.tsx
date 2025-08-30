@@ -76,7 +76,20 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
         if (savedData) {
           const projectData = JSON.parse(savedData)
           console.log('Loaded project data:', projectData)
-          setMonthlyData(projectData)
+          
+          // データをクリーンアップ
+          const cleanedData = Object.entries(projectData).reduce((acc, [key, value]) => {
+            // 月の形式（YYYY-MM）のキーのみ保持
+            if (/^\d{4}-\d{2}$/.test(key) && value && typeof value === 'object' && 'categories' in value && 'expenses' in value) {
+              acc[key] = value as MonthlyData
+            } else {
+              console.log('Removing invalid key during load:', key)
+            }
+            return acc
+          }, {} as Record<string, MonthlyData>)
+          
+          console.log('Cleaned project data:', cleanedData)
+          setMonthlyData(cleanedData)
         } else {
           console.log('No project data found, creating default')
           const defaultData = {
@@ -117,9 +130,20 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
 
   useEffect(() => {
     if (Object.keys(monthlyData).length > 0) {
-      // ローカルバックアップのみ
-      localStorage.setItem(`expense-project-${projectId}`, JSON.stringify(monthlyData))
-      console.log('Saved project data to localStorage:', monthlyData)
+      // 無効なキーを削除してクリーンアップ
+      const cleanedData = Object.entries(monthlyData).reduce((acc, [key, value]) => {
+        // 月の形式（YYYY-MM）のキーのみ保持
+        if (/^\d{4}-\d{2}$/.test(key) && value && typeof value === 'object' && 'categories' in value && 'expenses' in value) {
+          acc[key] = value as MonthlyData
+        } else {
+          console.log('Removing invalid key from monthlyData:', key)
+        }
+        return acc
+      }, {} as Record<string, MonthlyData>)
+      
+      // クリーンアップされたデータを保存
+      localStorage.setItem(`expense-project-${projectId}`, JSON.stringify(cleanedData))
+      console.log('Saved cleaned project data to localStorage:', cleanedData)
     }
   }, [monthlyData, projectId])
 

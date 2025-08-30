@@ -68,6 +68,12 @@ export function ExpenseHistoryDialog({
     }
     
     Object.entries(monthlyData).forEach(([monthKey, data]) => {
+      // monthKeyが月の形式（YYYY-MM）でない場合はスキップ
+      if (!/^\d{4}-\d{2}$/.test(monthKey)) {
+        console.log('Skipping non-month key:', monthKey)
+        return
+      }
+      
       // dataとdata.expensesが存在することを確認
       if (data && data.expenses && Array.isArray(data.expenses)) {
         data.expenses.forEach((expense) => {
@@ -88,6 +94,7 @@ export function ExpenseHistoryDialog({
     }
     
     return Object.entries(monthlyData)
+      .filter(([monthKey]) => /^\d{4}-\d{2}$/.test(monthKey)) // 月の形式のキーのみフィルタリング
       .map(([monthKey, data]) => {
         // dataとそのプロパティが存在することを確認
         if (!data || !data.categories || !data.expenses) {
