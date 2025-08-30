@@ -9,16 +9,8 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
 import { Plus, FolderOpen, Calendar, Trash2, HelpCircle, Lightbulb, Wifi, WifiOff } from "lucide-react"
-// import { syncProjects, type Project } from "@/lib/sync"
-// import { useAuth } from "@/components/auth-provider"
-
-interface Project {
-  id: string
-  name: string
-  description: string
-  createdAt: string
-  lastModified: string
-}
+import { syncProjects, type Project } from "@/lib/sync"
+import { useAuth } from "@/components/auth-provider"
 
 interface ProjectSelectorProps {
   showOnboardingHints?: boolean
@@ -26,13 +18,21 @@ interface ProjectSelectorProps {
 
 export function ProjectSelector({ showOnboardingHints = false }: ProjectSelectorProps) {
   const router = useRouter()
-  // const { user, loading: authLoading, error: authError, signInAnonymously } = useAuth()
+  const { user, loading: authLoading, error: authError, signInAnonymously } = useAuth()
   const [projects, setProjects] = useState<Project[]>([])
   const [isOnline, setIsOnline] = useState(true)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    // 認証が完了していない場合は匿名認証を実行
+    if (!authLoading && !user) {
+      signInAnonymously()
+      return
+    }
+
+    if (!user) return
+    
     // オンライン状態をチェック
     const checkOnlineStatus = () => {
       setIsOnline(navigator.onLine)
@@ -42,28 +42,30 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
     window.addEventListener('offline', checkOnlineStatus)
     checkOnlineStatus()
 
-    // ローカルストレージから読み込み
-    const loadProjects = () => {
+    // Firestoreからデータを取得
+    const loadProjects = async () => {
       try {
         setError(null)
-        console.log('Loading projects from localStorage for debugging')
+        console.log('Loading projects from Firestore for user:', user.uid)
         
-        // ローカルストレージから読み込み
-        if (typeof window !== "undefined") {
-          const saved = localStorage.getItem("expense-projects")
-          if (saved) {
-            const projectsData = JSON.parse(saved)
-            console.log('Loaded projects from localStorage:', projectsData)
-            setProjects(projectsData)
-          } else {
-            console.log('No projects found in localStorage')
-            setProjects([])
-          }
-        }
+        const projectsData = await syncProjects.getProjects(user.uid)
+        console.log('Loaded projects from Firestore:', projectsData)
+        setProjects(projectsData)
+        
+        // ローカルバックアップも保存
+        localStorage.setItem("expense-projects", JSON.stringify(projectsData))
       } catch (error) {
-        console.error('Error loading projects:', error)
+        console.error('Error loading projects from Firestore:', error)
+        // エラー時はローカルバックアップから読み込み
+        const saved = localStorage.getItem("expense-projects")
+        if (saved) {
+          const projectsData = JSON.parse(saved)
+          console.log('Loaded projects from localStorage backup:', projectsData)
+          setProjects(projectsData)
+        } else {
+          setProjects([])
+        }
         setError(error instanceof Error ? error.message : 'プロジェクトの読み込みに失敗しました')
-        setProjects([])
       } finally {
         setIsLoading(false)
       }
@@ -71,26 +73,51 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
 
     loadProjects()
 
+    // リアルタイム同期
+    const unsubscribe = syncProjects.subscribeToProjects(user.uid, (projectsData) => {
+      console.log('Projects subscription update:', projectsData)
+      if (Array.isArray(projectsData)) {
+        setProjects(projectsData)
+        // ローカルバックアップも保存
+        localStorage.setItem("expense-projects", JSON.stringify(projectsData))
+      } else {
+        console.error('Invalid projects data received:', projectsData)
+        setError('プロジェクトデータの形式が無効です')
+        setProjects([])
+      }
+    })
+
     return () => {
       window.removeEventListener('online', checkOnlineStatus)
       window.removeEventListener('offline', checkOnlineStatus)
+      unsubscribe()
     }
-  }, [])
+  }, [authLoading, user, signInAnonymously])
 
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
   const [newProjectName, setNewProjectName] = useState("")
   const [newProjectDescription, setNewProjectDescription] = useState("")
   const [showHints, setShowHints] = useState(showOnboardingHints)
 
-  const saveProjects = (updatedProjects: Project[]) => {
+  const saveProjects = async (updatedProjects: Project[]) => {
     setProjects(updatedProjects)
-    // ローカルバックアップのみ
+    // ローカルバックアップ
     localStorage.setItem("expense-projects", JSON.stringify(updatedProjects))
-    console.log('Saved projects to localStorage:', updatedProjects)
+    
+    // オンライン時はFirestoreに保存
+    if (isOnline && user) {
+      try {
+        for (const project of updatedProjects) {
+          await syncProjects.saveProject(project)
+        }
+      } catch (error) {
+        console.error('Error saving to Firestore:', error)
+      }
+    }
   }
 
-  const createProject = () => {
-    if (!newProjectName.trim()) return
+  const createProject = async () => {
+    if (!newProjectName.trim() || !user) return
 
     const newProject: Project = {
       id: Date.now().toString(),
@@ -98,6 +125,7 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
       description: newProjectDescription.trim(),
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
+      userId: user.uid,
     }
 
     const updatedProjects = [...projects, newProject]
@@ -111,12 +139,21 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
     router.push(`/projects/${newProject.id}`)
   }
 
-  const deleteProject = (projectId: string) => {
+  const deleteProject = async (projectId: string) => {
     const updatedProjects = projects.filter((p) => p.id !== projectId)
-    saveProjects(updatedProjects)
+    await saveProjects(updatedProjects)
 
     // Also remove project data from localStorage
     localStorage.removeItem(`expense-project-${projectId}`)
+    
+    // オンライン時はFirestoreからも削除
+    if (isOnline) {
+      try {
+        await syncProjects.deleteProject(projectId)
+      } catch (error) {
+        console.error('Error deleting from Firestore:', error)
+      }
+    }
     
     // If we're currently on the deleted project's page, redirect to home
     if (typeof window !== "undefined" && window.location.pathname === `/projects/${projectId}`) {
@@ -140,12 +177,18 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
           <h1 className="text-3xl font-bold text-foreground">出費管理</h1>
           <p className="text-muted-foreground">プロジェクトを選択または作成してください</p>
           
-          {/* オンライン状態表示 */}
+          {/* 認証・オンライン状態表示 */}
           <div className="flex items-center justify-center gap-2">
+            {user && (
+              <Badge variant="outline" className="gap-1">
+                <FolderOpen className="h-3 w-3" />
+                ユーザー: {user.uid.slice(-8)}
+              </Badge>
+            )}
             {isOnline ? (
               <Badge variant="default" className="gap-1">
                 <Wifi className="h-3 w-3" />
-                ローカルモード
+                オンライン同期
               </Badge>
             ) : (
               <Badge variant="secondary" className="gap-1">
@@ -156,10 +199,15 @@ export function ProjectSelector({ showOnboardingHints = false }: ProjectSelector
           </div>
 
           {/* エラー表示 */}
-          {error && (
+          {(authError || error) && (
             <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
               <p className="text-sm text-destructive font-medium">エラーが発生しました</p>
-              <p className="text-xs text-destructive mt-1">データエラー: {error}</p>
+              {authError && (
+                <p className="text-xs text-destructive mt-1">認証エラー: {authError}</p>
+              )}
+              {error && (
+                <p className="text-xs text-destructive mt-1">データエラー: {error}</p>
+              )}
               <Button 
                 variant="outline" 
                 size="sm" 

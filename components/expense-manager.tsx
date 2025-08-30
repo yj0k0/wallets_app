@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Plus, History, Target, ArrowLeft, Wifi, WifiOff } from "lucide-react"
-// import { syncProjectData, type ProjectData } from "@/lib/sync"
-// import { useAuth } from "@/components/auth-provider"
+import { syncProjectData, type ProjectData } from "@/lib/sync"
+import { useAuth } from "@/components/auth-provider"
 
 import { BudgetCategory } from "@/components/budget-category"
 import { AddCategoryDialog } from "@/components/add-category-dialog"
@@ -50,7 +50,7 @@ interface ExpenseManagerProps {
 
 export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseManagerProps) {
   const router = useRouter()
-  // const { user } = useAuth()
+  const { user } = useAuth()
   const [currentMonth, setCurrentMonth] = useState<string>(getMonthKey(new Date()))
   const [monthlyData, setMonthlyData] = useState<Record<string, MonthlyData>>({})
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
@@ -68,14 +68,14 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
     window.addEventListener('offline', checkOnlineStatus)
     checkOnlineStatus()
 
-    // ローカルストレージからデータを読み込み
-    const loadProjectData = () => {
+    // Firestoreからデータを取得
+    const loadProjectData = async () => {
       try {
-        console.log('Loading project data from localStorage for debugging')
-        const savedData = localStorage.getItem(`expense-project-${projectId}`)
-        if (savedData) {
-          const projectData = JSON.parse(savedData)
-          console.log('Loaded project data:', projectData)
+        console.log('Loading project data from Firestore for projectId:', projectId)
+        
+        const projectData = await syncProjectData.getProjectData(projectId)
+        if (projectData) {
+          console.log('Loaded project data from Firestore:', projectData)
           
           // データをクリーンアップ
           const cleanedData = Object.entries(projectData).reduce((acc, [key, value]) => {
@@ -91,7 +91,53 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
           console.log('Cleaned project data:', cleanedData)
           setMonthlyData(cleanedData)
         } else {
-          console.log('No project data found, creating default')
+          // ローカルバックアップから読み込み
+          const savedData = localStorage.getItem(`expense-project-${projectId}`)
+          if (savedData) {
+            const projectData = JSON.parse(savedData)
+            console.log('Loaded project data from localStorage backup:', projectData)
+            
+            // データをクリーンアップ
+            const cleanedData = Object.entries(projectData).reduce((acc, [key, value]) => {
+              if (/^\d{4}-\d{2}$/.test(key) && value && typeof value === 'object' && 'categories' in value && 'expenses' in value) {
+                acc[key] = value as MonthlyData
+              } else {
+                console.log('Removing invalid key during load:', key)
+              }
+              return acc
+            }, {} as Record<string, MonthlyData>)
+            
+            setMonthlyData(cleanedData)
+          } else {
+            console.log('No project data found, creating default')
+            const defaultData = {
+              [currentMonth]: {
+                categories: [],
+                expenses: [],
+              },
+            }
+            setMonthlyData(defaultData)
+          }
+        }
+      } catch (error) {
+        console.error('Error loading project data from Firestore:', error)
+        // エラー時はローカルバックアップから読み込み
+        const savedData = localStorage.getItem(`expense-project-${projectId}`)
+        if (savedData) {
+          const projectData = JSON.parse(savedData)
+          console.log('Loaded project data from localStorage backup:', projectData)
+          
+          const cleanedData = Object.entries(projectData).reduce((acc, [key, value]) => {
+            if (/^\d{4}-\d{2}$/.test(key) && value && typeof value === 'object' && 'categories' in value && 'expenses' in value) {
+              acc[key] = value as MonthlyData
+            } else {
+              console.log('Removing invalid key during load:', key)
+            }
+            return acc
+          }, {} as Record<string, MonthlyData>)
+          
+          setMonthlyData(cleanedData)
+        } else {
           const defaultData = {
             [currentMonth]: {
               categories: [],
@@ -100,15 +146,6 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
           }
           setMonthlyData(defaultData)
         }
-      } catch (error) {
-        console.error('Error loading project data:', error)
-        const defaultData = {
-          [currentMonth]: {
-            categories: [],
-            expenses: [],
-          },
-        }
-        setMonthlyData(defaultData)
       } finally {
         setIsLoading(false)
       }
@@ -116,10 +153,25 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
 
     loadProjectData()
 
-    // リアルタイム同期を無効化
-    const unsubscribe = () => {
-      console.log('Project data subscription disabled for debugging')
-    }
+    // リアルタイム同期
+    const unsubscribe = syncProjectData.subscribeToProjectData(projectId, (projectData) => {
+      console.log('Project data subscription update:', projectData)
+      if (projectData) {
+        // データをクリーンアップ
+        const cleanedData = Object.entries(projectData).reduce((acc, [key, value]) => {
+          if (/^\d{4}-\d{2}$/.test(key) && value && typeof value === 'object' && 'categories' in value && 'expenses' in value) {
+            acc[key] = value as MonthlyData
+          } else {
+            console.log('Removing invalid key during subscription:', key)
+          }
+          return acc
+        }, {} as Record<string, MonthlyData>)
+        
+        setMonthlyData(cleanedData)
+        // ローカルバックアップも保存
+        localStorage.setItem(`expense-project-${projectId}`, JSON.stringify(cleanedData))
+      }
+    })
 
     return () => {
       window.removeEventListener('online', checkOnlineStatus)
@@ -141,11 +193,17 @@ export default function ExpenseManager({ projectId, onBackToProjects }: ExpenseM
         return acc
       }, {} as Record<string, MonthlyData>)
       
-      // クリーンアップされたデータを保存
+      // ローカルバックアップ
       localStorage.setItem(`expense-project-${projectId}`, JSON.stringify(cleanedData))
-      console.log('Saved cleaned project data to localStorage:', cleanedData)
+      
+      // オンライン時はFirestoreに保存
+      if (isOnline) {
+        syncProjectData.saveProjectData(projectId, cleanedData).catch((error) => {
+          console.error('Error saving to Firestore:', error)
+        })
+      }
     }
-  }, [monthlyData, projectId])
+  }, [monthlyData, projectId, isOnline])
 
   const getCurrentMonthData = (): MonthlyData => {
     return monthlyData[currentMonth] || { categories: [], expenses: [] }
