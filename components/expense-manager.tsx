@@ -12,8 +12,7 @@ import { BudgetCategory } from "@/components/budget-category"
 import { AddCategoryDialog } from "@/components/add-category-dialog"
 import { ExpenseHistoryDialog } from "@/components/expense-history-dialog"
 import { QuickExpenseEntry } from "@/components/quick-expense-entry"
-import { BudgetInsights } from "@/components/budget-insights"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
 import { calculateBudgetAnalysis, getRemainingDaysByType, type DayCalculationType } from "@/lib/calculations"
 import { MonthSelector } from "@/components/month-selector"
 
@@ -491,17 +490,7 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
           </div>
         </div>
 
-        <Tabs defaultValue="dashboard" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 h-12 mb-6">
-            <TabsTrigger value="dashboard" className="text-sm font-medium h-10">
-              ダッシュボード
-            </TabsTrigger>
-            <TabsTrigger value="insights" className="text-sm font-medium h-10">
-              インサイト
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="dashboard" className="space-y-6">
+        <div className="space-y-6">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
               <Card className="touch-manipulation">
                 <CardHeader className="pb-2 px-3 pt-3">
@@ -646,17 +635,7 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
                 </div>
               )}
             </div>
-          </TabsContent>
-
-          <TabsContent value="insights" className="space-y-4 sm:space-y-6">
-            <BudgetInsights
-              expenses={expenses}
-              categories={categories}
-              monthlyData={monthlyData}
-              currentMonth={currentMonth}
-            />
-          </TabsContent>
-        </Tabs>
+          </div>
 
         <AddCategoryDialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen} onAdd={addCategory} />
 
