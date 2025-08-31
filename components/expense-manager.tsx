@@ -303,6 +303,40 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
     updateMonthlyData(currentMonth, {
       categories: updatedCategories,
     })
+
+    // 強制的にデータを保存
+    setTimeout(() => {
+      const currentData = monthlyData[currentMonth] || { categories: [], expenses: [] }
+      const newData = {
+        ...currentData,
+        categories: updatedCategories,
+      }
+      const updatedMonthlyData = {
+        ...monthlyData,
+        [currentMonth]: newData,
+      }
+      
+      console.log('Force saving after category addition:', updatedMonthlyData)
+      
+      // ローカルストレージに保存
+      try {
+        localStorage.setItem(`expense-project-${projectId}`, JSON.stringify(updatedMonthlyData))
+        console.log('Force saved to localStorage')
+      } catch (error) {
+        console.error('Error force saving to localStorage:', error)
+      }
+      
+      // Firestoreに保存
+      if (isOnline && user) {
+        syncProjectData.saveProjectData(projectId, updatedMonthlyData)
+          .then(() => {
+            console.log('Force saved to Firestore')
+          })
+          .catch((error) => {
+            console.error('Error force saving to Firestore:', error)
+          })
+      }
+    }, 100)
   }
 
   const addExpense = (categoryId: string, amount: number, description: string, date?: string) => {
