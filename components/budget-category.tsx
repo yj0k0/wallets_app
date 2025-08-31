@@ -81,7 +81,7 @@ export function BudgetCategory({
       name: editName,
       budget: Number.parseInt(editBudget) || 0,
       icon: editIcon,
-      dayCalculationType: editDayCalculationType, // Include day calculation type in updates
+      dayCalculationType: editDayCalculationType,
     })
     setIsEditOpen(false)
   }
@@ -109,70 +109,71 @@ export function BudgetCategory({
           </div>
           <div className="flex gap-1">
             {!isReadOnly && (
-              <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="ghost" size="sm">
-                    <Edit3 className="h-4 w-4" />
-                  </Button>
-                </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>カテゴリ編集</DialogTitle>
-                  <DialogDescription>カテゴリの詳細を編集してください。</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="edit-name">カテゴリ名</Label>
-                    <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-budget">予算額</Label>
-                    <Input
-                      id="edit-budget"
-                      type="number"
-                      value={editBudget}
-                      onChange={(e) => setEditBudget(e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-icon">アイコン</Label>
-                    <Input
-                      id="edit-icon"
-                      value={editIcon}
-                      onChange={(e) => setEditIcon(e.target.value)}
-                      placeholder="絵文字を入力"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="edit-day-calculation-type">日数計算方法</Label>
-                    <Select
-                      value={editDayCalculationType}
-                      onValueChange={(value: DayCalculationType) => setEditDayCalculationType(value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="weekdays">平日のみ</SelectItem>
-                        <SelectItem value="weekends">休日のみ</SelectItem>
-                        <SelectItem value="all">全日</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-                    キャンセル
-                  </Button>
-                  <Button onClick={handleEditSave}>保存</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+              <>
+                <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="sm">
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>カテゴリ編集</DialogTitle>
+                      <DialogDescription>カテゴリの詳細を編集してください。</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="edit-name">カテゴリ名</Label>
+                        <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-budget">予算額</Label>
+                        <Input
+                          id="edit-budget"
+                          type="number"
+                          value={editBudget}
+                          onChange={(e) => setEditBudget(e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-icon">アイコン</Label>
+                        <Input
+                          id="edit-icon"
+                          value={editIcon}
+                          onChange={(e) => setEditIcon(e.target.value)}
+                          placeholder="絵文字を入力"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="edit-day-calculation-type">日数計算方法</Label>
+                        <Select
+                          value={editDayCalculationType}
+                          onValueChange={(value: DayCalculationType) => setEditDayCalculationType(value)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="weekdays">平日のみ</SelectItem>
+                            <SelectItem value="weekends">休日のみ</SelectItem>
+                            <SelectItem value="all">全日</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+                        キャンセル
+                      </Button>
+                      <Button onClick={handleEditSave}>保存</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
 
-            {!isReadOnly && (
-              <Button variant="ghost" size="sm" onClick={onDelete}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
+                <Button variant="ghost" size="sm" onClick={onDelete}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </>
             )}
           </div>
         </div>
@@ -240,51 +241,51 @@ export function BudgetCategory({
                 </Button>
               </DialogTrigger>
               <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{category.name}の出費記録</DialogTitle>
-                <DialogDescription>出費の詳細を入力してください。</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="expense-amount">金額</Label>
-                  <Input
-                    id="expense-amount"
-                    type="number"
-                    value={expenseAmount}
-                    onChange={(e) => setExpenseAmount(e.target.value)}
-                    placeholder="金額を入力"
-                  />
+                <DialogHeader>
+                  <DialogTitle>{category.name}の出費記録</DialogTitle>
+                  <DialogDescription>出費の詳細を入力してください。</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="expense-amount">金額</Label>
+                    <Input
+                      id="expense-amount"
+                      type="number"
+                      value={expenseAmount}
+                      onChange={(e) => setExpenseAmount(e.target.value)}
+                      placeholder="金額を入力"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="expense-description">説明</Label>
+                    <Input
+                      id="expense-description"
+                      value={expenseDescription}
+                      onChange={(e) => setExpenseDescription(e.target.value)}
+                      placeholder="例: コンビニ弁当"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="expense-date">日付</Label>
+                    <Input
+                      id="expense-date"
+                      type="date"
+                      value={expenseDate}
+                      onChange={(e) => setExpenseDate(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label htmlFor="expense-description">説明</Label>
-                  <Input
-                    id="expense-description"
-                    value={expenseDescription}
-                    onChange={(e) => setExpenseDescription(e.target.value)}
-                    placeholder="例: コンビニ弁当"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="expense-date">日付</Label>
-                  <Input
-                    id="expense-date"
-                    type="date"
-                    value={expenseDate}
-                    onChange={(e) => setExpenseDate(e.target.value)}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsExpenseOpen(false)}>
-                  キャンセル
-                </Button>
-                <Button onClick={handleAddExpense} disabled={!expenseAmount || !expenseDescription.trim()}>
-                  記録
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsExpenseOpen(false)}>
+                    キャンセル
+                  </Button>
+                  <Button onClick={handleAddExpense} disabled={!expenseAmount || !expenseDescription.trim()}>
+                    記録
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
         )}
 
         {isOverBudget && (
