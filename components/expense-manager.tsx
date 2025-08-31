@@ -51,11 +51,14 @@ interface ExpenseManagerProps {
 
 export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly = false }: ExpenseManagerProps) {
   const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
   const [currentMonth, setCurrentMonth] = useState<string>(getMonthKey(new Date()))
   const [monthlyData, setMonthlyData] = useState<Record<string, MonthlyData>>({})
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
+  const [dataLoading, setDataLoading] = useState(true)
+  const [lastSavedData, setLastSavedData] = useState<string | null>(null)
 
   useEffect(() => {
     // オンライン状態をチェック
@@ -67,9 +70,31 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
     window.addEventListener('offline', checkOnlineStatus)
     checkOnlineStatus()
 
+    return () => {
+      window.removeEventListener('online', checkOnlineStatus)
+      window.removeEventListener('offline', checkOnlineStatus)
+    }
+  }, [])
+
+  useEffect(() => {
+    // 認証が完了するまで待機
+    if (authLoading) {
+      console.log('Waiting for authentication to complete...')
+      return
+    }
+
+    if (!user) {
+      console.log('No user available, cannot load data')
+      setDataLoading(false)
+      return
+    }
+
+    console.log('User authenticated, loading project data for projectId:', projectId, 'userId:', user.uid)
+
     // Firestoreからデータを取得
     const loadProjectData = async () => {
       try {
+        setDataLoading(true)
         console.log('Loading project data from Firestore for projectId:', projectId)
         
         const projectData = await syncProjectData.getProjectData(projectId)
@@ -145,6 +170,8 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
           }
           setMonthlyData(defaultData)
         }
+      } finally {
+        setDataLoading(false)
       }
     }
 
@@ -171,14 +198,13 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
     })
 
     return () => {
-      window.removeEventListener('online', checkOnlineStatus)
-      window.removeEventListener('offline', checkOnlineStatus)
       unsubscribe()
     }
-  }, [projectId, currentMonth])
+  }, [projectId, currentMonth, user, authLoading])
 
+  // データ保存処理を改善
   useEffect(() => {
-    if (Object.keys(monthlyData).length > 0) {
+    if (Object.keys(monthlyData).length > 0 && user) {
       // 無効なキーを削除してクリーンアップ
       const cleanedData = Object.entries(monthlyData).reduce((acc, [key, value]) => {
         // 月の形式（YYYY-MM）のキーのみ保持
@@ -190,35 +216,64 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
         return acc
       }, {} as Record<string, MonthlyData>)
       
-      // ローカルバックアップ
-      localStorage.setItem(`expense-project-${projectId}`, JSON.stringify(cleanedData))
+      const dataString = JSON.stringify(cleanedData)
       
-      // オンライン時はFirestoreに保存
-      if (isOnline) {
-        syncProjectData.saveProjectData(projectId, cleanedData).catch((error) => {
-          console.error('Error saving to Firestore:', error)
-        })
+      // データが変更された場合のみ保存
+      if (dataString !== lastSavedData) {
+        console.log('Saving data to localStorage and Firestore:', cleanedData)
+        
+        // ローカルバックアップ
+        try {
+          localStorage.setItem(`expense-project-${projectId}`, dataString)
+          console.log('Data saved to localStorage successfully')
+        } catch (error) {
+          console.error('Error saving to localStorage:', error)
+        }
+        
+        setLastSavedData(dataString)
+        
+        // オンライン時はFirestoreに保存
+        if (isOnline) {
+          syncProjectData.saveProjectData(projectId, cleanedData)
+            .then(() => {
+              console.log('Data saved to Firestore successfully')
+            })
+            .catch((error) => {
+              console.error('Error saving to Firestore:', error)
+            })
+        } else {
+          console.log('Offline mode - data saved to localStorage only')
+        }
       }
     }
-  }, [monthlyData, projectId, isOnline])
+  }, [monthlyData, projectId, isOnline, user, lastSavedData])
 
   const getCurrentMonthData = (): MonthlyData => {
-    return monthlyData[currentMonth] || { categories: [], expenses: [] }
+    const data = monthlyData[currentMonth] || { categories: [], expenses: [] }
+    console.log('Current month data for', currentMonth, ':', data)
+    return data
   }
 
   const { categories, expenses } = getCurrentMonthData()
 
   const updateMonthlyData = (monthKey: string, updates: Partial<MonthlyData>) => {
-    setMonthlyData((prev) => ({
-      ...prev,
-      [monthKey]: {
-        ...prev[monthKey],
-        ...updates,
-      },
-    }))
+    console.log('Updating monthly data for month:', monthKey, 'updates:', updates)
+    setMonthlyData((prev) => {
+      const currentData = prev[monthKey] || { categories: [], expenses: [] }
+      const newData = {
+        ...prev,
+        [monthKey]: {
+          ...currentData,
+          ...updates,
+        },
+      }
+      console.log('New monthly data:', newData)
+      return newData
+    })
   }
 
   const handleMonthChange = (monthKey: string) => {
+    console.log('Changing month to:', monthKey)
     // Initialize month with empty data if it doesn't exist
     if (!monthlyData[monthKey]) {
       setMonthlyData((prev) => ({
@@ -232,6 +287,7 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
   const availableMonths = Object.keys(monthlyData).sort()
 
   const addCategory = (name: string, budget: number, icon: string, dayCalculationType: DayCalculationType = "all") => {
+    console.log('Adding category:', { name, budget, icon, dayCalculationType })
     const newCategory: Category = {
       id: Date.now().toString(),
       name,
@@ -241,12 +297,16 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
       dayCalculationType,
     }
 
+    const updatedCategories = [...categories, newCategory]
+    console.log('Updated categories:', updatedCategories)
+    
     updateMonthlyData(currentMonth, {
-      categories: [...categories, newCategory],
+      categories: updatedCategories,
     })
   }
 
   const addExpense = (categoryId: string, amount: number, description: string, date?: string) => {
+    console.log('Adding expense:', { categoryId, amount, description, date })
     const newExpense: Expense = {
       id: Date.now().toString(),
       categoryId,
@@ -322,6 +382,41 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
   }
 
   const budgetAnalysis = calculateBudgetAnalysis(categories, expenses)
+
+  // 認証中またはデータ読み込み中の場合はローディング表示
+  if (authLoading || dataLoading) {
+    return (
+      <div className="min-h-screen bg-background p-3 sm:p-4 md:p-6">
+        <div className="max-w-6xl mx-auto flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">
+              {authLoading ? '認証中...' : 'データを読み込み中...'}
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 認証エラーの場合
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background p-3 sm:p-4 md:p-6">
+        <div className="max-w-6xl mx-auto flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold mb-4">認証エラー</h2>
+            <p className="text-muted-foreground mb-4">
+              データの同期に必要な認証が完了していません。
+            </p>
+            <Button onClick={() => window.location.reload()}>
+              ページを再読み込み
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background p-3 sm:p-4 md:p-6">
