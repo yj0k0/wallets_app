@@ -1,0 +1,439 @@
+================================================================================
+基本機能の実装
+================================================================================
+
+Phase 1: プロジェクト管理システムの構築
+-------------------------------------
+要件定義:
+- 複数のプロジェクト（家計管理、旅行費、プロジェクト別予算など）を管理
+- プロジェクトの作成、削除、選択機能
+- ローカルストレージでのデータ永続化
+
+実装工程:
+
+1. プロジェクト型定義の作成:
+// lib/types.ts
+export interface Project {
+  id: string
+  name: string
+  description?: string
+  createdAt: string
+  updatedAt: string
+}
+
+2. プロジェクト管理コンポーネントの実装:
+// components/project-selector.tsx
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Plus, Trash2 } from 'lucide-react'
+
+export default function ProjectSelector() {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const router = useRouter()
+
+  // ローカルストレージからの読み込み
+  useEffect(() => {
+    const savedProjects = localStorage.getItem('projects')
+    if (savedProjects) {
+      setProjects(JSON.parse(savedProjects))
+    }
+  }, [])
+
+  // プロジェクトの保存
+  const saveProjects = (newProjects: Project[]) => {
+    setProjects(newProjects)
+    localStorage.setItem('projects', JSON.stringify(newProjects))
+  }
+
+  // プロジェクトの作成
+  const createProject = (name: string, description: string) => {
+    const newProject: Project = {
+      id: Date.now().toString(),
+      name,
+      description,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+    saveProjects([...projects, newProject])
+  }
+
+  // プロジェクトの削除
+  const deleteProject = (id: string) => {
+    saveProjects(projects.filter(p => p.id !== id))
+  }
+
+  return (
+    <div className="container mx-auto p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">プロジェクト一覧</h1>
+        <Button onClick={() => setIsAddDialogOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          新しいプロジェクト
+        </Button>
+      </div>
+      
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {projects.map(project => (
+          <Card 
+            key={project.id} 
+            className="cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => router.push(`/projects/${project.id}`)}
+          >
+            <CardHeader>
+              <CardTitle>{project.name}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground">{project.description}</p>
+              <div className="flex justify-between items-center mt-4">
+                <span className="text-sm text-muted-foreground">
+                  {new Date(project.createdAt).toLocaleDateString()}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    deleteProject(project.id)
+                  }}
+                  className="text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+3. プロジェクト作成ダイアログの実装:
+// components/add-project-dialog.tsx
+'use client'
+
+import { useState } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+
+interface AddProjectDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onAdd: (name: string, description: string) => void
+}
+
+export function AddProjectDialog({ open, onOpenChange, onAdd }: AddProjectDialogProps) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (name.trim()) {
+      onAdd(name.trim(), description.trim())
+      setName('')
+      setDescription('')
+      onOpenChange(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>新しいプロジェクトを作成</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="name">プロジェクト名</Label>
+            <Input
+              id="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="例: 家計管理"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="description">説明（任意）</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="プロジェクトの説明を入力してください"
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              キャンセル
+            </Button>
+            <Button type="submit">作成</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+Phase 2: カテゴリ別予算設定機能
+-----------------------------
+要件定義:
+- 各プロジェクト内でカテゴリ別の予算を設定
+- カテゴリの追加、編集、削除
+- 予算の進捗表示
+
+実装工程:
+
+1. カテゴリと予算の型定義:
+// lib/types.ts
+export interface Category {
+  id: string
+  name: string
+  budget: number
+  color: string
+  createdAt: string
+}
+
+export interface Expense {
+  id: string
+  categoryId: string
+  amount: number
+  description: string
+  date: string
+  createdAt: string
+}
+
+export interface MonthlyData {
+  categories: Category[]
+  expenses: Expense[]
+}
+
+2. カテゴリ管理コンポーネントの実装:
+// components/budget-category.tsx
+'use client'
+
+import { useState } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
+import { Edit3, Trash2, Plus } from 'lucide-react'
+
+interface BudgetCategoryProps {
+  category: Category
+  expenses: Expense[]
+  onEdit: (category: Category) => void
+  onDelete: (id: string) => void
+  onAddExpense: (categoryId: string) => void
+}
+
+export function BudgetCategory({ 
+  category, 
+  expenses, 
+  onEdit, 
+  onDelete, 
+  onAddExpense 
+}: BudgetCategoryProps) {
+  const categoryExpenses = expenses.filter(e => e.categoryId === category.id)
+  const totalSpent = categoryExpenses.reduce((sum, e) => sum + e.amount, 0)
+  const remaining = category.budget - totalSpent
+  const progress = (totalSpent / category.budget) * 100
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{category.name}</CardTitle>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onEdit(category)}
+          >
+            <Edit3 className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onDelete(category.id)}
+            className="text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>予算: ¥{category.budget.toLocaleString()}</span>
+            <span>残り: ¥{remaining.toLocaleString()}</span>
+          </div>
+          <Progress value={progress} className="h-2" />
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">
+              使用済み: ¥{totalSpent.toLocaleString()}
+            </span>
+            <Button
+              size="sm"
+              onClick={() => onAddExpense(category.id)}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              出費を記録
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+Phase 3: 出費記録機能
+-------------------
+要件定義:
+- カテゴリ別に出費を記録
+- 日付、金額、説明の入力
+- 出費履歴の表示
+
+実装工程:
+
+1. 出費記録ダイアログの実装:
+// components/add-expense-dialog.tsx
+'use client'
+
+import { useState } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+
+interface AddExpenseDialogProps {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onAdd: (expense: Omit<Expense, 'id' | 'createdAt'>) => void
+  categoryName: string
+}
+
+export function AddExpenseDialog({ 
+  open, 
+  onOpenChange, 
+  onAdd, 
+  categoryName 
+}: AddExpenseDialogProps) {
+  const [amount, setAmount] = useState('')
+  const [description, setDescription] = useState('')
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    const numAmount = parseFloat(amount)
+    if (numAmount > 0 && description.trim()) {
+      onAdd({
+        amount: numAmount,
+        description: description.trim(),
+        date,
+        categoryId: '' // 親コンポーネントで設定
+      })
+      setAmount('')
+      setDescription('')
+      setDate(new Date().toISOString().split('T')[0])
+      onOpenChange(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{categoryName} - 出費を記録</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <Label htmlFor="amount">金額</Label>
+            <Input
+              id="amount"
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="1000"
+              min="0"
+              step="1"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="description">説明</Label>
+            <Input
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="何に使ったか"
+              required
+            />
+          </div>
+          <div>
+            <Label htmlFor="date">日付</Label>
+            <Input
+              id="date"
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              required
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              キャンセル
+            </Button>
+            <Button type="submit">記録</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+開発工程での学び
+---------------
+コンポーネント設計の重要性:
+- 再利用可能なコンポーネントの設計
+- Propsの適切な型定義
+- イベントハンドリングの統一
+
+状態管理の実装:
+- useStateによるローカル状態管理
+- useEffectによる副作用の処理
+- データの永続化（localStorage）
+
+TypeScriptの活用:
+- インターフェースによる型定義
+- 型安全性の確保
+- 開発時のエラー検出
+
+UI/UXの考慮:
+- 直感的な操作フロー
+- 適切なフィードバック
+- レスポンシブデザイン
+
+実装時の課題と解決
+-----------------
+1. データ構造の設計:
+- 課題: カテゴリと出費の関係性の設計
+- 解決: 正規化されたデータ構造を採用
+
+2. 状態の同期:
+- 課題: 複数コンポーネント間での状態同期
+- 解決: 親コンポーネントでの状態管理とprops渡し
+
+3. バリデーション:
+- 課題: 入力値の検証
+- 解決: フォームレベルでのバリデーション実装
+
+次のステップ
+-----------
+基本機能の実装が完了したので、次はFirebase統合によるデータ同期機能の実装に進みます。ローカルストレージからFirebase Firestoreへの移行を行います。

@@ -500,12 +500,12 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
                   </CardContent>
                 </Card>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {categories.map((category) => (
                     <BudgetCategory
                       key={category.id}
                       category={category}
-                      expenses={expenses.filter((e) => e.categoryId === category.id)}
+                      expenses={expenses}
                       onUpdate={(updates) => updateCategory(category.id, updates)}
                       onDelete={() => deleteCategory(category.id)}
                       onAddExpense={(amount, description, date) => addExpense(category.id, amount, description, date)}

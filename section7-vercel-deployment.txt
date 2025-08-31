@@ -1,0 +1,383 @@
+================================================================================
+Vercelデプロイと本番環境での運用
+================================================================================
+
+Phase 4: 本番環境へのデプロイ
+-------------------------
+要件定義:
+- Vercelでの本番デプロイ
+- 環境変数の適切な設定
+- 本番環境でのエラー解決
+- パフォーマンス最適化
+
+実装工程:
+
+1. Vercelデプロイの準備
+
+Vercel設定ファイルの作成:
+// vercel.json
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "framework": "nextjs"
+}
+
+package.jsonの確認:
+{
+  "name": "wallets",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "15.5.2",
+    "react": "^18",
+    "react-dom": "^18",
+    "firebase": "^10.7.1",
+    "lucide-react": "^0.294.0",
+    "recharts": "^2.8.0",
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-select": "^2.0.0",
+    "@radix-ui/react-tabs": "^1.0.4",
+    "@radix-ui/react-progress": "^1.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "postcss": "^8",
+    "tailwindcss": "^3.3.0",
+    "eslint": "^8",
+    "eslint-config-next": "15.5.2"
+  }
+}
+
+2. Vercel CLIを使用したデプロイ
+
+Vercel CLIのインストールとデプロイ:
+# Vercel CLIのインストール（npxを使用）
+npx vercel
+
+# デプロイプロセス
+# 1. Vercelアカウントへのログイン
+# 2. プロジェクトの選択/作成
+# 3. 設定の確認
+# 4. デプロイの実行
+
+デプロイ時の設定:
+# プロジェクト名の設定
+? Set up and deploy "~/wallets"? [Y/n] y
+? Which scope do you want to deploy to? your-account
+? Link to existing project? [y/N] n
+? What's your project's name? wallets-app
+? In which directory is your code located? ./
+
+3. 環境変数の設定
+
+Vercel Dashboardでの環境変数設定:
+# 必要な環境変数
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+
+環境変数設定の手順:
+1. Vercel Dashboardにアクセス
+2. プロジェクトを選択
+3. Settings → Environment Variables
+4. 各環境変数を追加
+5. Production、Preview、Development環境に適用
+
+4. 本番環境でのエラー解決
+
+エラー1: Firebase認証エラー（auth/invalid-api-key）:
+
+問題の特定:
+// ブラウザコンソールでのエラー
+Firebase: Error (auth/invalid-api-key).
+
+解決策:
+// lib/firebase.ts での設定確認
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+}
+
+// 環境変数の確認
+console.log('Firebase Config:', {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY ? 'Set' : 'Not Set',
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ? 'Set' : 'Not Set',
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ? 'Set' : 'Not Set'
+})
+
+エラー2: Firestoreインデックスエラー:
+
+問題の特定:
+// ブラウザコンソールでのエラー
+FirebaseError: [code=failed-precondition]: The query requires an index. 
+You can create it here: https://console.firebase.google.com/v1/r/project/wallets-5a3ac/firestore/indexes?create_composite=...
+
+解決策:
+1. Firebase Consoleにアクセス
+2. Firestore Database → Indexes
+3. 複合インデックスの作成
+4. 必要なフィールドの組み合わせを設定
+
+エラー3: クライアントサイド例外（forEach）:
+
+問題の特定:
+// ブラウザコンソールでのエラー
+TypeError: Cannot read properties of undefined (reading 'forEach')
+
+解決策 - データ検証の強化:
+// lib/sync.ts でのデータ検証強化
+export const syncProjectData = {
+  async get(projectId: string): Promise<ProjectData> {
+    try {
+      const dataRef = doc(db, 'projectData', projectId)
+      const snapshot = await getDoc(dataRef)
+      
+      if (snapshot.exists()) {
+        const data = snapshot.data()
+        // データの検証とクリーンアップ
+        const cleanedData: ProjectData = {}
+        Object.entries(data).forEach(([key, value]) => {
+          if (/^\d{4}-\d{2}$/.test(key) && value && typeof value === 'object') {
+            const monthlyData = value as any
+            if (monthlyData.categories && monthlyData.expenses) {
+              cleanedData[key] = {
+                categories: Array.isArray(monthlyData.categories) ? monthlyData.categories : [],
+                expenses: Array.isArray(monthlyData.expenses) ? monthlyData.expenses : []
+              }
+            }
+          }
+        })
+        return cleanedData
+      }
+      return {}
+    } catch (error) {
+      console.error('Error fetching project data:', error)
+      return {}
+    }
+  }
+}
+
+エラー4: ビルドエラー（TypeScript）:
+
+問題の特定:
+# ビルド時のエラー
+Type error: Cannot invoke an object which is possibly 'undefined'.
+
+解決策:
+// components/project-selector.tsx でのnull check追加
+useEffect(() => {
+  if (!user?.uid) return
+
+  let unsubscribe: (() => void) | undefined
+
+  const setupSync = async () => {
+    try {
+      // ... 同期処理
+      unsubscribe = syncProjects.subscribe(user.uid, (updatedProjects) => {
+        setProjects(updatedProjects)
+      })
+    } catch (err) {
+      console.error('Sync setup error:', err)
+    }
+  }
+
+  setupSync()
+
+  return () => {
+    if (unsubscribe) {
+      unsubscribe()
+    }
+  }
+}, [user?.uid])
+
+5. パフォーマンス最適化
+
+コード分割と遅延読み込み:
+// ダイアログコンポーネントの遅延読み込み
+import dynamic from 'next/dynamic'
+
+const AddProjectDialog = dynamic(() => import('@/components/add-project-dialog'), {
+  loading: () => <div>読み込み中...</div>
+})
+
+const ShareProjectDialog = dynamic(() => import('@/components/share-project-dialog'), {
+  loading: () => <div>読み込み中...</div>
+})
+
+画像最適化:
+// next.config.ts
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  images: {
+    domains: ['firebasestorage.googleapis.com'],
+  },
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
+}
+
+module.exports = nextConfig
+
+Firebase初期化の最適化:
+// lib/firebase.ts
+let app: any = null
+let db: any = null
+let auth: any = null
+
+export function initializeFirebase() {
+  if (!app) {
+    const firebaseConfig = {
+      apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+      authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+      appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+    }
+
+    app = initializeApp(firebaseConfig)
+    db = getFirestore(app)
+    auth = getAuth(app)
+  }
+
+  return { app, db, auth }
+}
+
+export const { db, auth } = initializeFirebase()
+export default app
+
+6. セキュリティの強化
+
+Firestoreセキュリティルール:
+// firestore.rules
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // プロジェクトのセキュリティルール
+    match /projects/{projectId} {
+      allow read, write: if request.auth != null && 
+        (resource.data.userId == request.auth.uid || 
+         (resource.data.isShared == true && 
+          resource.data.shareToken != null));
+    }
+    
+    // プロジェクトデータのセキュリティルール
+    match /projectData/{projectId} {
+      allow read, write: if request.auth != null && 
+        (exists(/databases/$(database)/documents/projects/$(projectId)) &&
+         (get(/databases/$(database)/documents/projects/$(projectId)).data.userId == request.auth.uid ||
+          (get(/databases/$(database)/documents/projects/$(projectId)).data.isShared == true &&
+           get(/databases/$(database)/documents/projects/$(projectId)).data.allowEdit == true)));
+    }
+  }
+}
+
+環境変数の保護:
+# .gitignore の確認
+.env*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+7. 監視とログ
+
+エラーログの実装:
+// lib/logger.ts
+export const logger = {
+  error: (message: string, error?: any) => {
+    console.error(`[ERROR] ${message}`, error)
+    // 本番環境では外部ログサービスに送信
+    if (process.env.NODE_ENV === 'production') {
+      // Sentry や LogRocket などのログサービス
+    }
+  },
+  
+  info: (message: string, data?: any) => {
+    console.log(`[INFO] ${message}`, data)
+  },
+  
+  warn: (message: string, data?: any) => {
+    console.warn(`[WARN] ${message}`, data)
+  }
+}
+
+パフォーマンス監視:
+// lib/performance.ts
+export const performanceMonitor = {
+  measure: (name: string, fn: () => void) => {
+    const start = performance.now()
+    fn()
+    const end = performance.now()
+    console.log(`${name} took ${end - start}ms`)
+  },
+  
+  measureAsync: async (name: string, fn: () => Promise<void>) => {
+    const start = performance.now()
+    await fn()
+    const end = performance.now()
+    console.log(`${name} took ${end - start}ms`)
+  }
+}
+
+開発工程での学び
+---------------
+本番環境の複雑さ:
+- 環境変数の適切な管理
+- セキュリティの重要性
+- エラーハンドリングの必要性
+
+デプロイプロセスの重要性:
+- CI/CDパイプラインの構築
+- 環境別の設定管理
+- ロールバック戦略
+
+パフォーマンス最適化:
+- コード分割の効果
+- 画像最適化の重要性
+- バンドルサイズの管理
+
+監視とログ:
+- エラーの早期発見
+- パフォーマンスの監視
+- ユーザー体験の向上
+
+実装時の課題と解決
+-----------------
+1. 環境変数の設定ミス:
+- 課題: 本番環境でFirebase設定が読み込まれない
+- 解決: Vercel Dashboardでの環境変数設定確認
+
+2. Firestoreインデックスの不足:
+- 課題: 複合クエリが実行できない
+- 解決: Firebase Consoleでのインデックス作成
+
+3. データ型エラーの発生:
+- 課題: 本番環境での予期しないデータ構造
+- 解決: 堅牢なデータ検証とクリーンアップ
+
+4. パフォーマンスの問題:
+- 課題: 初期読み込みが遅い
+- 解決: コード分割と遅延読み込みの実装
+
+次のステップ
+-----------
+本番環境での運用が安定したので、次は開発工程の総括と今後の展望に進みます。今回の開発で学んだことと今後の改善点をまとめます。

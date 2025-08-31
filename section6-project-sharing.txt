@@ -1,0 +1,631 @@
+================================================================================
+プロジェクト共有と共同編集機能
+================================================================================
+
+Phase 3: URL共有機能の実装
+-----------------------
+要件定義:
+- プロジェクトをURLで共有
+- 共有トークンの生成と管理
+- 読み取り専用モードでの共有
+- 共有状態の管理
+
+実装工程:
+
+1. 共有機能の基盤実装
+
+共有トークン生成機能:
+// lib/sync.ts に追加
+export function generateShareToken(): string {
+  // 32文字のランダムな文字列を生成
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  let result = ''
+  for (let i = 0; i < 32; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return result
+}
+
+export function generateShareUrl(shareToken: string): string {
+  return `${window.location.origin}/shared/${shareToken}`
+}
+
+// 共有プロジェクトの取得
+export const syncProjects = {
+  // ... 既存のメソッド ...
+
+  // プロジェクトの共有
+  async shareProject(projectId: string, shareToken: string, allowEdit: boolean = false): Promise<void> {
+    try {
+      const projectRef = doc(db, 'projects', projectId)
+      await updateDoc(projectRef, {
+        isShared: true,
+        shareToken,
+        sharedAt: serverTimestamp(),
+        allowEdit
+      })
+    } catch (error) {
+      console.error('Error sharing project:', error)
+      throw error
+    }
+  },
+
+  // プロジェクトの共有解除
+  async unshareProject(projectId: string): Promise<void> {
+    try {
+      const projectRef = doc(db, 'projects', projectId)
+      await updateDoc(projectRef, {
+        isShared: false,
+        shareToken: '',
+        sharedAt: null,
+        allowEdit: false
+      })
+    } catch (error) {
+      console.error('Error unsharing project:', error)
+      throw error
+    }
+  },
+
+  // 共有トークンでプロジェクトを取得
+  async getProjectByShareToken(shareToken: string): Promise<Project | null> {
+    try {
+      const projectsRef = collection(db, 'projects')
+      const q = query(projectsRef, where('shareToken', '==', shareToken))
+      const snapshot = await getDocs(q)
+      
+      if (snapshot.empty) {
+        return null
+      }
+
+      const doc = snapshot.docs[0]
+      const data = doc.data()
+      
+      return {
+        id: doc.id,
+        name: data.name || '',
+        description: data.description || '',
+        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+        userId: data.userId || '',
+        isShared: data.isShared || false,
+        shareToken: data.shareToken || '',
+        sharedAt: data.sharedAt?.toDate?.()?.toISOString() || '',
+        allowEdit: data.allowEdit || false
+      }
+    } catch (error) {
+      console.error('Error fetching shared project:', error)
+      return null
+    }
+  }
+}
+
+2. 共有ダイアログの実装
+
+共有プロジェクトダイアログ:
+// components/share-project-dialog.tsx
+'use client'
+
+import { useState, useEffect } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Edit, Lock, Copy, Share2 } from 'lucide-react'
+import { generateShareToken, generateShareUrl, syncProjects } from '@/lib/sync'
+import { Project } from '@/lib/types'
+
+interface ShareProjectDialogProps {
+  project: Project
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function ShareProjectDialog({ project, open, onOpenChange }: ShareProjectDialogProps) {
+  const [shareToken, setShareToken] = useState(project.shareToken || '')
+  const [shareUrl, setShareUrl] = useState('')
+  const [isCopied, setIsCopied] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isShared, setIsShared] = useState(project.isShared || false)
+  const [allowEdit, setAllowEdit] = useState(project.allowEdit || false)
+
+  useEffect(() => {
+    if (shareToken) {
+      setShareUrl(generateShareUrl(shareToken))
+    }
+  }, [shareToken])
+
+  const generateToken = async () => {
+    setIsLoading(true)
+    try {
+      const token = generateShareToken()
+      setShareToken(token)
+      await syncProjects.shareProject(project.id, token, allowEdit)
+      setIsShared(true)
+    } catch (error) {
+      console.error('Error generating share token:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const copyUrl = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl)
+      setIsCopied(true)
+      setTimeout(() => setIsCopied(false), 2000)
+    } catch (error) {
+      console.error('Error copying URL:', error)
+    }
+  }
+
+  const unshareProject = async () => {
+    setIsLoading(true)
+    try {
+      await syncProjects.unshareProject(project.id)
+      setShareToken('')
+      setShareUrl('')
+      setIsShared(false)
+      setAllowEdit(false)
+    } catch (error) {
+      console.error('Error unsharing project:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const updateEditPermission = async () => {
+    if (!shareToken) return
+    
+    setIsLoading(true)
+    try {
+      await syncProjects.shareProject(project.id, shareToken, allowEdit)
+    } catch (error) {
+      console.error('Error updating edit permission:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Share2 className="h-5 w-5" />
+            プロジェクトを共有
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          {/* プロジェクト情報 */}
+          <div className="p-4 bg-muted rounded-lg">
+            <h3 className="font-semibold">{project.name}</h3>
+            {project.description && (
+              <p className="text-sm text-muted-foreground mt-1">{project.description}</p>
+            )}
+          </div>
+
+          {/* 共有状態 */}
+          <div className="flex items-center gap-2">
+            {isShared ? (
+              <div className="flex items-center gap-2 text-green-600">
+                <Share2 className="h-4 w-4" />
+                <span className="text-sm">共有中</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Lock className="h-4 w-4" />
+                <span className="text-sm">非共有</span>
+              </div>
+            )}
+          </div>
+
+          {/* 編集権限設定 */}
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="allowEdit"
+              checked={allowEdit}
+              onCheckedChange={(checked) => {
+                setAllowEdit(checked as boolean)
+                if (shareToken) {
+                  updateEditPermission()
+                }
+              }}
+              disabled={isLoading}
+            />
+            <Label htmlFor="allowEdit" className="flex items-center gap-2">
+              <Edit className="h-4 w-4" />
+              共同編集を許可
+            </Label>
+          </div>
+
+          {/* 共有URL */}
+          {shareUrl && (
+            <div className="space-y-2">
+              <Label>共有URL</Label>
+              <div className="flex gap-2">
+                <Input value={shareUrl} readOnly />
+                <Button
+                  onClick={copyUrl}
+                  variant="outline"
+                  size="sm"
+                  disabled={isLoading}
+                >
+                  <Copy className="h-4 w-4" />
+                  {isCopied ? 'コピー済み' : 'コピー'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* アクションボタン */}
+          <div className="flex gap-2">
+            {!isShared ? (
+              <Button
+                onClick={generateToken}
+                disabled={isLoading}
+                className="flex-1"
+              >
+                {isLoading ? '生成中...' : '共有を開始'}
+              </Button>
+            ) : (
+              <Button
+                onClick={unshareProject}
+                variant="destructive"
+                disabled={isLoading}
+                className="flex-1"
+              >
+                {isLoading ? '処理中...' : '共有を停止'}
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+3. 共有プロジェクト表示ページの実装
+
+共有プロジェクトページ:
+// app/shared/[shareToken]/page.tsx
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { syncProjects, syncProjectData } from '@/lib/sync'
+import { Project, ProjectData } from '@/lib/types'
+import ExpenseManager from '@/components/expense-manager'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { ArrowLeft, Loader2 } from 'lucide-react'
+import Link from 'next/link'
+
+export default function SharedProjectPage() {
+  const params = useParams()
+  const shareToken = params.shareToken as string
+  
+  const [project, setProject] = useState<Project | null>(null)
+  const [projectData, setProjectData] = useState<ProjectData>({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const loadSharedProject = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        // 共有プロジェクトの取得
+        const sharedProject = await syncProjects.getProjectByShareToken(shareToken)
+        if (!sharedProject) {
+          setError('共有プロジェクトが見つかりません')
+          return
+        }
+
+        setProject(sharedProject)
+
+        // プロジェクトデータの取得
+        const data = await syncProjectData.get(sharedProject.id)
+        setProjectData(data)
+      } catch (err) {
+        console.error('Error loading shared project:', err)
+        setError('プロジェクトの読み込みに失敗しました')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (shareToken) {
+      loadSharedProject()
+    }
+  }, [shareToken])
+
+  if (loading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span>読み込み中...</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !project) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-destructive">エラー</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">
+              {error || 'プロジェクトが見つかりません'}
+            </p>
+            <Link href="/">
+              <Button>
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                ホームに戻る
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container mx-auto p-6">
+      <div className="mb-6">
+        <Link href="/">
+          <Button variant="ghost" className="mb-4">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            ホームに戻る
+          </Button>
+        </Link>
+        
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">{project.name}</h1>
+            {project.description && (
+              <p className="text-muted-foreground mt-2">{project.description}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            {project.allowEdit ? (
+              <div className="flex items-center gap-2 text-green-600">
+                <Edit className="h-4 w-4" />
+                <span className="text-sm">共同編集モード</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Lock className="h-4 w-4" />
+                <span className="text-sm">閲覧専用モード</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <ExpenseManager
+        projectId={project.id}
+        isReadOnly={!project.allowEdit}
+      />
+    </div>
+  )
+}
+
+4. 読み取り専用モードの実装
+
+ExpenseManagerの更新:
+// components/expense-manager.tsx の更新部分
+interface ExpenseManagerProps {
+  projectId: string
+  onBackToProjects?: () => void
+  isReadOnly?: boolean // 新しく追加
+}
+
+export default function ExpenseManager({ 
+  projectId, 
+  onBackToProjects, 
+  isReadOnly = false 
+}: ExpenseManagerProps) {
+  // ... 既存のコード ...
+
+  return (
+    <div className="container mx-auto p-6">
+      {/* ヘッダー部分 */}
+      <div className="flex justify-between items-center mb-6">
+        <div className="flex items-center gap-4">
+          {onBackToProjects && (
+            <Button variant="ghost" onClick={onBackToProjects}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              プロジェクト一覧に戻る
+            </Button>
+          )}
+          <h1 className="text-3xl font-bold">{currentProject?.name}</h1>
+        </div>
+        
+        {isReadOnly && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Lock className="h-4 w-4" />
+            <span className="text-sm">閲覧専用</span>
+          </div>
+        )}
+      </div>
+
+      {/* カテゴリがない場合の表示 */}
+      {Object.keys(currentMonthData.categories || {}).length === 0 ? (
+        <div className="text-center py-12">
+          <div className="max-w-md mx-auto">
+            <h2 className="text-xl font-semibold mb-4">
+              {isReadOnly ? 'このプロジェクトにはカテゴリがありません' : '最初のカテゴリを追加しましょう'}
+            </h2>
+            {!isReadOnly && (
+              <Button
+                onClick={() => setIsAddDialogOpen(true)}
+                className="gap-2 h-12 px-6 text-base touch-manipulation"
+              >
+                <Plus className="h-5 w-5" />
+                最初のカテゴリを追加
+              </Button>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* カテゴリ一覧の表示 */
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {Object.values(currentMonthData.categories || {}).map((category) => (
+            <BudgetCategory
+              key={category.id}
+              category={category}
+              expenses={currentMonthData.expenses || []}
+              onEdit={handleEditCategory}
+              onDelete={handleDeleteCategory}
+              onAddExpense={handleAddExpense}
+              isReadOnly={isReadOnly} // 読み取り専用フラグを渡す
+            />
+          ))}
+        </div>
+      )}
+
+      {/* カテゴリ追加ボタン */}
+      {!isReadOnly && Object.keys(currentMonthData.categories || {}).length > 0 && (
+        <div className="mt-6 text-center">
+          <Button
+            onClick={() => setIsAddDialogOpen(true)}
+            variant="outline"
+            className="gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            カテゴリを追加
+          </Button>
+        </div>
+      )}
+
+      {/* ダイアログ類 */}
+      {/* ... 既存のダイアログ ... */}
+    </div>
+  )
+}
+
+5. BudgetCategoryの読み取り専用対応
+
+BudgetCategoryの更新:
+// components/budget-category.tsx の更新部分
+interface BudgetCategoryProps {
+  category: Category
+  expenses: Expense[]
+  onEdit: (category: Category) => void
+  onDelete: (id: string) => void
+  onAddExpense: (categoryId: string) => void
+  isReadOnly?: boolean // 新しく追加
+}
+
+export function BudgetCategory({
+  category,
+  expenses,
+  onEdit,
+  onDelete,
+  onAddExpense,
+  isReadOnly = false
+}: BudgetCategoryProps) {
+  // ... 既存のコード ...
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm font-medium">{category.name}</CardTitle>
+        {!isReadOnly && (
+          <div className="flex items-center gap-2">
+            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <Edit3 className="h-4 w-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                {/* 編集ダイアログの内容 */}
+              </DialogContent>
+            </Dialog>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onDelete(category.id)}
+              className="text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>予算: ¥{category.budget.toLocaleString()}</span>
+            <span>残り: ¥{remaining.toLocaleString()}</span>
+          </div>
+          <Progress value={progress} className="h-2" />
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">
+              使用済み: ¥{totalSpent.toLocaleString()}
+            </span>
+            {!isReadOnly && (
+              <Button
+                size="sm"
+                onClick={() => onAddExpense(category.id)}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                出費を記録
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+開発工程での学び
+---------------
+共有機能の設計:
+- セキュアなトークン生成
+- 権限管理の実装
+- URLベースのアクセス制御
+
+読み取り専用モードの実装:
+- UI要素の条件付き表示
+- 操作の制限
+- ユーザーへの明確な状態表示
+
+Firestoreセキュリティルール:
+- 共有プロジェクトへのアクセス制御
+- 編集権限の管理
+- データの保護
+
+ユーザーエクスペリエンス:
+- 共有状態の視覚的表示
+- 操作の制限の明確化
+- エラーハンドリング
+
+実装時の課題と解決
+-----------------
+1. 共有トークンの重複:
+- 課題: 同じトークンが生成される可能性
+- 解決: 十分な長さのランダム文字列生成
+
+2. 権限管理の複雑さ:
+- 課題: 読み取り専用と編集可能の切り替え
+- 解決: 統一された権限フラグの実装
+
+3. URL共有のセキュリティ:
+- 課題: 共有URLの安全性
+- 解決: Firestoreセキュリティルールでの制御
+
+次のステップ
+-----------
+プロジェクト共有機能が完了したので、次はVercelデプロイと本番環境での運用に進みます。デプロイプロセスと本番環境での課題解決を解説します。

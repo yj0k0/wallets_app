@@ -1,0 +1,203 @@
+================================================================================
+開発環境の構築
+================================================================================
+
+プロジェクトの初期化
+------------------
+まず、Next.js 15プロジェクトの初期化から始めました。
+
+Next.jsプロジェクトの作成:
+npx create-next-app@latest wallets --typescript --tailwind --eslint --app --src-dir --import-alias "@/*"
+
+選択したオプション:
+- --typescript: TypeScriptによる型安全な開発
+- --tailwind: Tailwind CSSによる迅速なスタイリング
+- --eslint: コード品質の向上
+- --app: App Routerの使用（Next.js 13以降の新機能）
+- --src-dir: ソースコードをsrcディレクトリに配置
+- --import-alias "@/*": 絶対パスでのインポート
+
+プロジェクト構造の確認
+---------------------
+初期化後のプロジェクト構造：
+wallets/
+├── src/
+│   ├── app/
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   └── components/
+├── public/
+├── package.json
+├── tsconfig.json
+├── tailwind.config.ts
+└── next.config.ts
+
+開発サーバーの起動
+-----------------
+cd wallets
+npm run dev
+
+開発サーバーが起動し、http://localhost:3000でアプリケーションにアクセスできることを確認しました。
+
+Firebaseプロジェクトの作成
+-------------------------
+Firebase Consoleでの設定:
+1. [Firebase Console](https://console.firebase.google.com/)にアクセス
+2. 新しいプロジェクト「wallets-app」を作成
+3. Webアプリケーションを追加
+4. Firebase設定情報を取得
+
+Firebase設定ファイルの作成:
+// lib/firebase.ts
+import { initializeApp } from 'firebase/app'
+import { getFirestore } from 'firebase/firestore'
+import { getAuth } from 'firebase/auth'
+
+const firebaseConfig = {
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
+}
+
+const app = initializeApp(firebaseConfig)
+export const db = getFirestore(app)
+export const auth = getAuth(app)
+export default app
+
+環境変数の設定
+-------------
+.env.localファイルの作成:
+# .env.local
+NEXT_PUBLIC_FIREBASE_API_KEY=your_api_key
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your_project_id
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=your_project.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+NEXT_PUBLIC_FIREBASE_APP_ID=your_app_id
+
+環境変数の重要性:
+- NEXT_PUBLIC_プレフィックスはクライアントサイドで使用可能
+- セキュリティのため、実際の値はGitにコミットしない
+- .gitignoreに.env*を追加して保護
+
+必要なパッケージのインストール
+----------------------------
+Firebase関連パッケージ:
+npm install firebase
+
+UIコンポーネントライブラリ:
+npm install @radix-ui/react-dialog @radix-ui/react-select @radix-ui/react-tabs @radix-ui/react-progress
+
+アイコンライブラリ:
+npm install lucide-react
+
+グラフライブラリ:
+npm install recharts
+
+TypeScript設定の最適化
+--------------------
+tsconfig.jsonの調整:
+{
+  "compilerOptions": {
+    "target": "es5",
+    "lib": ["dom", "dom.iterable", "es6"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}
+
+Tailwind CSS設定の調整
+--------------------
+tailwind.config.tsの設定:
+import type { Config } from 'tailwindcss'
+
+const config: Config = {
+  content: [
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        background: 'hsl(var(--background))',
+        foreground: 'hsl(var(--foreground))',
+        primary: {
+          DEFAULT: 'hsl(var(--primary))',
+          foreground: 'hsl(var(--primary-foreground))',
+        },
+        // その他のカスタムカラー
+      },
+    },
+  },
+  plugins: [],
+}
+export default config
+
+開発環境の動作確認
+-----------------
+基本的な動作確認:
+1. 開発サーバーの起動確認
+2. ホットリロードの動作確認
+3. TypeScriptコンパイルエラーの確認
+4. Tailwind CSSの適用確認
+
+Firebase接続の確認:
+// テスト用のコード
+import { db } from '@/lib/firebase'
+console.log('Firebase connected:', db)
+
+開発工程での学び
+---------------
+環境構築の重要性:
+- 適切な環境構築が後続の開発効率を左右
+- TypeScriptとESLintの設定が開発品質を向上
+- 環境変数の適切な管理がセキュリティの基盤
+
+Next.js 15の新機能:
+- App Routerによる新しいファイルベースルーティング
+- Server ComponentsとClient Componentsの使い分け
+- 最新のReact機能の活用
+
+Firebase統合の準備:
+- 適切な設定ファイルの作成
+- 環境変数によるセキュアな設定管理
+- 初期化コードの準備
+
+実装時の課題と解決
+-----------------
+環境変数の設定ミス:
+- 課題: 本番環境でFirebase設定が読み込まれない
+- 解決: Vercel Dashboardでの環境変数設定確認
+
+Firebase設定の確認:
+- 課題: 開発環境での接続エラー
+- 解決: .env.localファイルの作成と環境変数の確認
+
+次のステップ
+-----------
+開発環境の構築が完了したので、次は基本機能の実装に進みます。プロジェクト管理システムから始めて、段階的に機能を追加していきます。
