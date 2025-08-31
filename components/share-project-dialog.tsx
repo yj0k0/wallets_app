@@ -22,7 +22,9 @@ import {
   Eye, 
   EyeOff,
   Calendar,
-  Users
+  Users,
+  Edit,
+  Lock
 } from "lucide-react"
 import { syncProjects, generateShareToken, generateShareUrl, type Project } from "@/lib/sync"
 
@@ -38,16 +40,19 @@ export function ShareProjectDialog({ project, open, onOpenChange }: ShareProject
   const [isCopied, setIsCopied] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [isShared, setIsShared] = useState(false)
+  const [allowEdit, setAllowEdit] = useState(false)
 
   useEffect(() => {
     if (project.isShared && project.shareToken) {
       setShareToken(project.shareToken)
       setShareUrl(generateShareUrl(project.shareToken))
       setIsShared(true)
+      setAllowEdit(project.allowEdit || false)
     } else {
       setShareToken("")
       setShareUrl("")
       setIsShared(false)
+      setAllowEdit(false)
     }
   }, [project])
 
@@ -56,7 +61,7 @@ export function ShareProjectDialog({ project, open, onOpenChange }: ShareProject
     
     setIsLoading(true)
     try {
-      await syncProjects.shareProject(project.id, shareToken)
+      await syncProjects.shareProject(project.id, shareToken, allowEdit)
       setShareUrl(generateShareUrl(shareToken))
       setIsShared(true)
     } catch (error) {
@@ -117,15 +122,24 @@ export function ShareProjectDialog({ project, open, onOpenChange }: ShareProject
           <Card>
             <CardContent className="pt-4">
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-medium">{project.name}</h3>
-                  {isShared && (
-                    <Badge variant="default" className="gap-1">
-                      <Eye className="h-3 w-3" />
-                      共有中
-                    </Badge>
-                  )}
-                </div>
+                                  <div className="flex items-center gap-2">
+                    <h3 className="font-medium">{project.name}</h3>
+                    {isShared && (
+                      <Badge variant="default" className="gap-1">
+                        {allowEdit ? (
+                          <>
+                            <Edit className="h-3 w-3" />
+                            共同編集
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="h-3 w-3" />
+                            閲覧のみ
+                          </>
+                        )}
+                      </Badge>
+                    )}
+                  </div>
                 {project.description && (
                   <p className="text-sm text-muted-foreground">{project.description}</p>
                 )}
@@ -166,6 +180,25 @@ export function ShareProjectDialog({ project, open, onOpenChange }: ShareProject
                     生成
                   </Button>
                 </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>編集権限</Label>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="allowEdit"
+                    checked={allowEdit}
+                    onChange={(e) => setAllowEdit(e.target.checked)}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="allowEdit" className="text-sm">
+                    共同編集を許可する
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {allowEdit ? "共有されたユーザーはプロジェクトを編集できます" : "共有されたユーザーは閲覧のみ可能です"}
+                </p>
               </div>
               
               <Button
@@ -218,10 +251,10 @@ export function ShareProjectDialog({ project, open, onOpenChange }: ShareProject
           <div className="bg-muted/50 rounded-lg p-3">
             <h4 className="font-medium text-sm mb-2">共有について</h4>
             <ul className="text-xs text-muted-foreground space-y-1">
-              <li>• 共有されたプロジェクトは読み取り専用です</li>
               <li>• 共有URLを知っている人は誰でもアクセスできます</li>
+              <li>• 編集権限を設定して共同編集を許可できます</li>
               <li>• いつでも共有を解除できます</li>
-              <li>• プロジェクトの編集は所有者のみ可能です</li>
+              <li>• プロジェクトの削除は所有者のみ可能です</li>
             </ul>
           </div>
         </div>

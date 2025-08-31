@@ -5,7 +5,7 @@ import { useParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Eye, Calendar, Users, AlertCircle } from "lucide-react"
+import { ArrowLeft, Eye, Calendar, Users, AlertCircle, Edit } from "lucide-react"
 import { syncProjects, syncProjectData, type Project, type ProjectData } from "@/lib/sync"
 import ExpenseManager from "@/components/expense-manager"
 
@@ -98,8 +98,17 @@ export default function SharedProjectPage() {
             戻る
           </Button>
           <Badge variant="default" className="gap-1">
-            <Eye className="h-3 w-3" />
-            共有プロジェクト
+            {project.allowEdit ? (
+              <>
+                <Edit className="h-3 w-3" />
+                共同編集
+              </>
+            ) : (
+              <>
+                <Eye className="h-3 w-3" />
+                閲覧のみ
+              </>
+            )}
           </Badge>
         </div>
         
@@ -132,7 +141,7 @@ export default function SharedProjectPage() {
         <ExpenseManager 
           projectId={project.id} 
           onBackToProjects={() => window.history.back()}
-          isReadOnly={true}
+          isReadOnly={!project.allowEdit}
         />
       )}
     </div>

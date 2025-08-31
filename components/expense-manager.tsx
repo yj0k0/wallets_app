@@ -470,10 +470,11 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
                   </Button>
                   <Button
                     onClick={() => setIsAddDialogOpen(true)}
+                    disabled={isReadOnly}
                     className="gap-2 flex-1 sm:flex-none h-12 text-sm touch-manipulation"
                   >
                     <Plus className="h-4 w-4" />
-                    カテゴリ追加
+                    {isReadOnly ? "編集不可" : "カテゴリ追加"}
                   </Button>
                 </div>
               </div>
@@ -487,13 +488,14 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
                       <p className="text-sm text-muted-foreground max-w-md mx-auto leading-relaxed">
                         「カテゴリ追加」ボタンから最初の予算カテゴリを作成してください。
                       </p>
-                      <Button
-                        onClick={() => setIsAddDialogOpen(true)}
-                        className="gap-2 h-12 px-6 text-base touch-manipulation"
-                      >
-                        <Plus className="h-5 w-5" />
-                        最初のカテゴリを追加
-                      </Button>
+                                    <Button
+                onClick={() => setIsAddDialogOpen(true)}
+                disabled={isReadOnly}
+                className="gap-2 h-12 px-6 text-base touch-manipulation"
+              >
+                <Plus className="h-5 w-5" />
+                {isReadOnly ? "編集不可" : "最初のカテゴリを追加"}
+              </Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -509,6 +511,7 @@ export default function ExpenseManager({ projectId, onBackToProjects, isReadOnly
                       onAddExpense={(amount, description, date) => addExpense(category.id, amount, description, date)}
                       onUpdateExpense={updateExpense}
                       onDeleteExpense={deleteExpense}
+                      isReadOnly={isReadOnly}
                     />
                   ))}
                 </div>

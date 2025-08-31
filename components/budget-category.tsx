@@ -45,6 +45,7 @@ interface BudgetCategoryProps {
   onAddExpense: (amount: number, description: string, date?: string) => void
   onUpdateExpense: (expenseId: string, updates: Partial<Expense>) => void
   onDeleteExpense: (expenseId: string) => void
+  isReadOnly?: boolean
 }
 
 export function BudgetCategory({
@@ -55,6 +56,7 @@ export function BudgetCategory({
   onAddExpense,
   onUpdateExpense,
   onDeleteExpense,
+  isReadOnly = false,
 }: BudgetCategoryProps) {
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isExpenseOpen, setIsExpenseOpen] = useState(false)
@@ -106,12 +108,13 @@ export function BudgetCategory({
             <CardTitle className="text-lg">{category.name}</CardTitle>
           </div>
           <div className="flex gap-1">
-            <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-              <DialogTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <Edit3 className="h-4 w-4" />
-                </Button>
-              </DialogTrigger>
+            {!isReadOnly && (
+              <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="ghost" size="sm">
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>カテゴリ編集</DialogTitle>
@@ -166,9 +169,11 @@ export function BudgetCategory({
               </DialogContent>
             </Dialog>
 
-            <Button variant="ghost" size="sm" onClick={onDelete}>
-              <Trash2 className="h-4 w-4" />
-            </Button>
+            {!isReadOnly && (
+              <Button variant="ghost" size="sm" onClick={onDelete}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -225,14 +230,15 @@ export function BudgetCategory({
           </div>
         )}
 
-        <div className="flex gap-2">
-          <Dialog open={isExpenseOpen} onOpenChange={setIsExpenseOpen}>
-            <DialogTrigger asChild>
-              <Button className="flex-1 gap-2">
-                <Plus className="h-4 w-4" />
-                出費を記録
-              </Button>
-            </DialogTrigger>
+        {!isReadOnly && (
+          <div className="flex gap-2">
+            <Dialog open={isExpenseOpen} onOpenChange={setIsExpenseOpen}>
+              <DialogTrigger asChild>
+                <Button className="flex-1 gap-2">
+                  <Plus className="h-4 w-4" />
+                  出費を記録
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{category.name}の出費記録</DialogTitle>
@@ -279,6 +285,7 @@ export function BudgetCategory({
             </DialogContent>
           </Dialog>
         </div>
+        )}
 
         {isOverBudget && (
           <Badge variant="destructive" className="w-full justify-center">

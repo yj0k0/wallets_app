@@ -34,6 +34,7 @@ export interface Project {
   isShared?: boolean
   shareToken?: string
   sharedAt?: string
+  allowEdit?: boolean
 }
 
 export interface Category {
@@ -171,13 +172,14 @@ export const syncProjects = {
   },
 
   // プロジェクトを共有する
-  async shareProject(projectId: string, shareToken: string): Promise<void> {
+  async shareProject(projectId: string, shareToken: string, allowEdit: boolean = false): Promise<void> {
     try {
       const projectRef = doc(db, 'projects', projectId)
       await setDoc(projectRef, {
         isShared: true,
         shareToken,
-        sharedAt: new Date().toISOString()
+        sharedAt: new Date().toISOString(),
+        allowEdit
       }, { merge: true })
     } catch (error) {
       console.error('Error sharing project:', error)
@@ -192,7 +194,8 @@ export const syncProjects = {
       await setDoc(projectRef, {
         isShared: false,
         shareToken: null,
-        sharedAt: null
+        sharedAt: null,
+        allowEdit: false
       }, { merge: true })
     } catch (error) {
       console.error('Error unsharing project:', error)
@@ -216,17 +219,18 @@ export const syncProjects = {
       
       const doc = querySnapshot.docs[0]
       const data = doc.data()
-      return {
-        id: doc.id,
-        name: data.name || '',
-        description: data.description || '',
-        createdAt: data.createdAt || new Date().toISOString(),
-        lastModified: data.lastModified || new Date().toISOString(),
-        userId: data.userId || '',
-        isShared: data.isShared || false,
-        shareToken: data.shareToken || '',
-        sharedAt: data.sharedAt || ''
-      } as Project
+              return {
+          id: doc.id,
+          name: data.name || '',
+          description: data.description || '',
+          createdAt: data.createdAt || new Date().toISOString(),
+          lastModified: data.lastModified || new Date().toISOString(),
+          userId: data.userId || '',
+          isShared: data.isShared || false,
+          shareToken: data.shareToken || '',
+          sharedAt: data.sharedAt || '',
+          allowEdit: data.allowEdit || false
+        } as Project
     } catch (error) {
       console.error('Error getting project by share token:', error)
       return null
