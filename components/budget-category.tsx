@@ -239,7 +239,7 @@ export function BudgetCategory({
                   出費を記録
                 </Button>
               </DialogTrigger>
-            <DialogContent>
+              <DialogContent>
               <DialogHeader>
                 <DialogTitle>{category.name}の出費記録</DialogTitle>
                 <DialogDescription>出費の詳細を入力してください。</DialogDescription>
